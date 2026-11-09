@@ -1,0 +1,603 @@
+/* ===================== DevFest 2027 ===================== */
+:root {
+  /* Colors sampled from the artwork */
+  --sky-day: #b6d2e8;      /* top edge of skyline-day-wide.jpg (middle) */
+  --sky-sunset: #a8989a;   /* top edge of skyline-sunset-wide.jpg (middle) */
+  --water-day: #60adaf;
+  --water-sunset: #306265;
+  --water-deep: #173638;
+  --ink: #1d2a44;          /* the dark outline color */
+  --cream: #f6e7c8;        /* banner / window glow */
+  --glow: #ffe9a8;
+  --sea-top: #50aab5;      /* top edge of the sea background */
+
+  --font-hand: "Gaegu", "Comic Sans MS", cursive;
+  --font-body: "Nunito", system-ui, sans-serif;
+
+  /* Updated by script.js: 0 = day, 1 = sunset */
+  --p: 0;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--cream);
+  background: var(--water-deep);
+}
+
+/* ===================== HERO ===================== */
+.hero {
+  position: relative;
+  height: 240vh;               /* how much scrolling the day->sunset takes */
+}
+.hero__sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;              /* mobile: the area actually visible */
+  overflow: hidden;
+  /* cqw/cqh = this box (the visible window, without the desktop scrollbar) */
+  container-type: size;
+}
+
+/* ---------- Sky above the art (portrait only) ---------- */
+/* The art's top-edge colors, sampled left / middle / right, so the image's
+   top edge blends straight into it. */
+.sky { position: absolute; inset: 0; display: none; }
+.sky--day    { background: linear-gradient(90deg, #adc9e2, var(--sky-day) 50%, #bed9ec); }
+.sky--sunset { background: linear-gradient(90deg, #a79fa6, var(--sky-sunset) 50%, #ac979a); opacity: var(--p); }
+
+/* ---------- Stage = the displayed 16:9 image ---------- */
+/* Hotspots, boat and blimp are positioned in % of the stage, so they stay
+   locked to the drawing. The variables below are inherited by them too.
+
+   Landscape: the image COVERS the window, centered. Squarer windows lose some
+   of the outer left/right edges (the labeled buildings are at 22-74% of the
+   width, so they stay visible down to a 1:1 window). Ultrawide windows lose
+   sky and water, centered, but never more than:
+     --crop-top-max  from the top    (Tracks roof at 16.6%; antenna tip 5.7%)
+     --keep-bottom   kept at the bottom (building hotspots end at 91.1%)
+   If both can't fit, the top limit wins.
+   Portrait: see the @container rule below. */
+.stage {
+  --crop-top-max: 0.163;
+  --keep-bottom: 0.915;
+  /* Blimp (see .blimp below). Width: 39% of the art, but at least 580px so
+     the two-line countdown fits at full size, and never wider than the window. */
+  --blimp-w: 0.39;
+  --bw: min(max(var(--blimp-w) * var(--art-w), 580px), 96cqw);
+  /* 3% from the art's top, or just below the window's top when the sky is cropped */
+  --blimp-top: max(3%, -1 * var(--art-top) + 1.5cqh);
+  /* Boat (see .boat below). Visible water = the art's bottom 12% minus
+     whatever is cropped below the window. The hull is the lower third of the
+     boat image, so a boat up to 4.6x the water strip wide still floats with
+     the waterline at least halfway up the hull. --bdrift = side-to-side drift,
+     as a fraction of the boat's width. */
+  --water-vis: calc(0.12 * var(--art-h) - max(0px, var(--art-crop-bottom)));
+  --boat-w: clamp(140px, min(14cqw, 4.6 * var(--water-vis)), 300px);
+  --bdrift: 0.08;
+  --art-w: max(100cqw, 100cqh * 16 / 9);
+  --art-h: calc(var(--art-w) * 9 / 16);
+  --art-left: calc((100cqw - var(--art-w)) / 2);
+  --art-overflow: calc(var(--art-h) - 100cqh);
+  --art-top: calc(-1 * min(max(var(--art-overflow) / 2,
+                               var(--art-overflow) - var(--art-h) * (1 - var(--keep-bottom))),
+                           var(--art-h) * var(--crop-top-max)));
+  /* how much of the art is hidden below the window */
+  --art-crop-bottom: calc(var(--art-h) + var(--art-top) - 100cqh);
+
+  position: absolute;
+  left: var(--art-left);
+  top: var(--art-top);
+  width: var(--art-w);
+  height: var(--art-h);
+}
+/* Portrait: covering would cut off most buildings, so fit the full width,
+   anchor to the bottom and show the sky color above. */
+/* Phones (under 600px wide): the blimp is 85% of the screen (at least 320px)
+   and shows the compact one-line countdown. */
+@container (width < 600px) {
+  .stage {
+    --bw: min(max(85cqw, 320px), 96cqw);
+    /* boat: 28% of the screen; small drift so it clears the Schedule hotspot */
+    --boat-w: 28cqw;
+    --bdrift: 0.02;
+  }
+}
+@container (aspect-ratio < 1) {
+  .stage {
+    --art-w: 100cqw;
+    --art-top: calc(100cqh - var(--art-h));
+    /* the art is short here, so the blimp flies in the sky above it: its
+       bottom 5% down the art, above the antenna tip (5.7%). 5.4 = the blimp
+       image's width/height. */
+    --blimp-top: calc(5% - var(--bw) / 5.4);
+  }
+  .sky { display: block; }
+  /* No edge fade: the sky colors are the art's own top edge, so the join is
+     invisible; fading both stacked images would let day show through at sunset. */
+}
+.skyline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.skyline--sunset { opacity: var(--p); }
+
+/* ---------- Clickable buildings ---------- */
+.hotspot {
+  position: absolute;
+  border-radius: 10px;
+  /* label text is already in the drawing; keep it for screen readers only */
+  color: transparent;
+  font-size: 0;
+  outline: none;
+}
+.hotspot::before {             /* soft glow on hover */
+  content: "";
+  position: absolute;
+  inset: -12%;
+  border-radius: 40%;
+  background: radial-gradient(closest-side, rgba(255, 233, 168, .55), transparent);
+  mix-blend-mode: screen;
+  opacity: 0;
+  transition: opacity .25s ease;
+}
+.hotspot::after {              /* little tag that pops up */
+  content: attr(data-label);
+  position: absolute;
+  left: 50%;
+  bottom: .5em;                /* inside the building, so it's never cropped */
+  transform: translate(-50%, 6px);
+  padding: .15em .7em;
+  font: 700 clamp(14px, 1.3vw, 20px)/1.4 var(--font-hand);
+  color: var(--ink);
+  background: var(--cream);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity .2s ease, transform .2s ease;
+  pointer-events: none;
+}
+.hotspot:hover::before, .hotspot:focus-visible::before { opacity: 1; }
+.hotspot:hover::after,  .hotspot:focus-visible::after  { opacity: 1; transform: translate(-50%, 0); }
+
+/* Positions as % of the artwork (left, top, width, height).
+   Schedule overlaps About; it comes later in the HTML so it's on top. */
+.hotspot--about    { left: 22.7%; top: 48.3%; width: 9.4%;  height: 42.8%; }
+.hotspot--schedule { left: 28.3%; top: 75.2%; width: 10.5%; height: 15.9%; }
+.hotspot--tracks   { left: 43.3%; top: 16.6%; width: 6.0%;  height: 73.8%; }
+.hotspot--faq      { left: 67.9%; top: 34.2%; width: 5.5%;  height: 20.0%; }
+.hotspot--judges   { left: 66.2%; top: 54.2%; width: 6.6%;  height: 33.5%; }
+
+/* ---------- Sponsors boat (inside .stage) ---------- */
+/* --boat-w wide (set on .stage). Placed against the VISIBLE window, since the
+   art can be cropped:
+   - bottom: just above the window's bottom edge (or 1% up from the art's
+     bottom if that's visible). The hull is 59-92% down the image and the bob
+     (4% down) and rock stay inside the image's transparent bottom margin, so
+     nothing is ever cut off.
+   - left: 6% of the window (cqw), but pulled left if the hull's tip (91% of
+     the image width, plus drift) would reach the Schedule hotspot (28.3% of
+     the art); never so far left that the drift or the hover scale cuts it
+     off. (var(--art-left) converts window x to stage x.)
+   Three loops with unrelated durations so the motion never visibly repeats:
+   drift (side to side, on the link), bob (up/down) and rock (tilt) on the img.
+   They animate the separate translate/rotate properties, so the hover
+   `transform` still works on top of them. */
+.boat {
+  position: absolute;
+  width: var(--boat-w);
+  left: calc(max(var(--boat-w) * (var(--bdrift) + 0.03) + 2px,
+                 min(6cqw, var(--art-left) + 0.283 * var(--art-w)
+                           - var(--boat-w) * (0.91 + var(--bdrift)) - 2px))
+             - var(--art-left));
+  bottom: max(1%, var(--art-crop-bottom) + 2px);
+  z-index: 3;
+  animation: boat-drift 13.7s ease-in-out infinite;
+  filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .15));
+  pointer-events: none;        /* only the clipped img below catches the pointer */
+}
+.boat img {
+  width: 100%;
+  display: block;
+  transform-origin: 50% 85%;
+  animation: boat-bob 3.3s ease-in-out infinite,
+             boat-rock 5.1s ease-in-out infinite;
+  transition: transform .25s ease;
+  /* Only the drawn boat (mast, sail, hull) is clickable/hoverable, not the
+     transparent corners of the image, so it never blocks a building hotspot
+     behind it (clicks still go to the link). Traced from boat-sponsors.png,
+     in % of the image. */
+  pointer-events: auto;
+  clip-path: polygon(44% 4%, 59% 4%, 65% 14%, 72% 19%, 82% 24%, 77% 31%, 68% 40%,
+                     60% 45%, 51% 50%, 51% 58%, 72% 63%, 91% 68%, 93% 84%, 79% 90%,
+                     71% 94%, 39% 94%, 32% 90%, 14% 85%, 9% 80%, 2% 69%, 9% 58%, 44% 58%);
+}
+.boat:hover img, .boat:focus-visible img { transform: scale(1.08) rotate(-3deg); }
+
+@keyframes boat-drift {        /* +/- --bdrift of the boat's width */
+  0%, 100% { translate: 0 0; }
+  35%      { translate: calc(var(--bdrift) * 100%) 0; }
+  70%      { translate: calc(var(--bdrift) * -100%) 0; }
+}
+@keyframes boat-bob {          /* % of the boat's height */
+  0%, 100% { translate: 0 4%; }
+  50%      { translate: 0 -12%; }
+}
+@keyframes boat-rock {
+  0%, 100% { rotate: -4deg; }
+  50%      { rotate: 4deg; }
+}
+
+/* ---------- Blimp (inside .stage) ---------- */
+/* --bw wide (set on .stage). Flies from the center of the art (x 51%, just
+   right of the Tracks tower) to the window's left edge as you scroll. The start
+   is pulled left if the blimp would stick out past the window's right edge, so
+   it's never cut off. Landscape: in the art's sky, above the labeled buildings
+   (the Tracks label starts ~45% down, FAQ at 34%). Portrait: in the sky above
+   the art. cqw/cqh here = the window. */
+.blimp {
+  position: absolute;
+  top: var(--blimp-top);
+  left: calc((1 - var(--p)) * min(51%, 100cqw - var(--art-left) - var(--bw) - 2cqw)
+             + var(--p) * (2cqw - var(--art-left)));
+  width: var(--bw);
+  animation: float 5s ease-in-out infinite;
+  z-index: 2;
+}
+.blimp img { width: 100%; display: block; }
+/* The blimp is a size container, so cqw below = % of the blimp's width and the
+   text always fits the cream banner (left 33%, width 60%, top 30%, height 50%
+   of the image = 9.26cqw tall). */
+.blimp { container-type: inline-size; }
+.blimp__text {
+  position: absolute;
+  left: 33%;
+  width: 60%;
+  top: 30%;
+  height: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-hand);
+  line-height: 1;
+  color: var(--ink);
+  white-space: nowrap;
+}
+/* Sizes scale with the blimp (cqw = % of its width) between readable minimums
+   and sensible maximums. The blimp is >= 580px in this two-line mode, which is
+   what these minimums need to fit the banner. */
+.blimp__date  { font-size: clamp(18px, 3.1cqw, 28px); font-weight: 700; }
+.blimp__count { font-size: clamp(28px, 4.9cqw, 46px); font-weight: 700; word-spacing: .12em; }
+.cd-short { display: none; }
+/* Phone-size blimp (< 580px): one line, compact form ("89d 04h 12m") */
+@container (max-width: 579px) {
+  .blimp__date { display: none; }
+  .cd-long  { display: none; }
+  .cd-short { display: inline; }
+  .blimp__count { font-size: clamp(18px, 8.2cqw, 34px); }
+}
+/* For screen readers only (the countdown's once-a-minute live region) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+@keyframes float {
+  0%, 100% { translate: 0 0; }
+  50%      { translate: 0 -6px; }
+}
+
+.scroll-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 2.5%;
+  transform: translateX(-50%);
+  font: 700 22px var(--font-hand);
+  color: var(--cream);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  opacity: calc(1 - var(--p) * 4);
+  animation: nudge 1.6s ease-in-out infinite;
+  z-index: 3;
+}
+@keyframes nudge { 50% { translate: 0 6px; } }
+
+/* ===================== CONTENT ===================== */
+.content {
+  position: relative;
+  /* sunset water -> deep -> back up to the bright sea of the Sponsors section */
+  background: linear-gradient(var(--water-sunset), var(--water-deep) 30%,
+                              var(--water-deep) 70%, var(--sea-top));
+  padding: 4rem 1.25rem 10rem;
+}
+.section {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 4rem 0;
+  scroll-margin-top: 1rem;
+}
+.section h2 {
+  font: 700 clamp(2.4rem, 5vw, 3.6rem)/1 var(--font-hand);
+  color: var(--glow);
+  margin: 0 0 1.25rem;
+  text-shadow: 0 0 18px rgba(255, 233, 168, .35);
+}
+.section p { line-height: 1.65; font-size: 1.1rem; max-width: 65ch; }
+
+.btn {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: .6em 1.4em;
+  font: 700 1.4rem var(--font-hand);
+  color: var(--ink);
+  background: var(--cream);
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  text-decoration: none;
+  box-shadow: 0 4px 0 var(--ink);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.btn:hover { transform: translateY(2px); box-shadow: 0 2px 0 var(--ink); }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.25rem;
+}
+.card {
+  background: rgba(246, 231, 200, .08);
+  border: 2px solid rgba(246, 231, 200, .35);
+  border-radius: 18px;
+  padding: 1.25rem;
+}
+.card h3 { font: 700 1.6rem var(--font-hand); margin: 0 0 .4rem; color: var(--cream); }
+.card p { margin: 0; opacity: .85; }
+.person { text-align: center; }
+.avatar {
+  width: 96px; aspect-ratio: 1; margin: 0 auto 1rem;
+  border-radius: 50%; background: var(--water-day);
+  border: 3px solid var(--cream);
+}
+
+.timeline { list-style: none; padding: 0; margin: 0; border-left: 3px dashed rgba(246, 231, 200, .5); }
+.timeline li { position: relative; padding: .5rem 0 1.25rem 1.5rem; font-size: 1.1rem; }
+.timeline li::before {
+  content: ""; position: absolute; left: -9px; top: .85rem;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--glow); box-shadow: 0 0 10px var(--glow);
+}
+.time { font: 700 1.4rem var(--font-hand); color: var(--glow); margin-right: .5rem; }
+
+details {
+  border-bottom: 2px solid rgba(246, 231, 200, .25);
+  padding: 1rem 0;
+}
+summary { cursor: pointer; font: 700 1.5rem var(--font-hand); }
+details p { margin: .6rem 0 0; }
+
+
+/* ===================== SPONSORS (underwater) ===================== */
+/* Positions use vw so the layout scales like the Figma frame (448 x 505 ->
+   100vw x 112.7vw). The fish swim in the top 64vw; the sponsors block starts
+   below that and the section grows to fit it (bigger logos need more room). */
+.sea {
+  position: relative;
+  min-height: 112.7vw;
+  padding: 64vw 0 14vw;        /* fish area above, breathing room below */
+  overflow: hidden;            /* clips off-screen fish/bubbles: no sideways scrolling */
+  /* sea.jpg = the sea painting stacked twice (2nd copy mirrored so the join is seamless) */
+  background: var(--sea-top) url("assets/sea.jpg") top center / 100% auto repeat-y;
+}
+
+/* ---------- Fish: swim smoothly across, above the heading ---------- */
+/* .fish (wrapper) does the crossing: linear, steady, --t per crossing.
+   The img inside does the rest, so nothing rotates around a far-away point:
+     fish-wave   a long smooth up/down curve (ease-in-out, alternate; one
+                 full wave = 2 x --wh)
+     fish-tilt   nose up while rising, nose down while falling: same speed as
+                 the wave, a quarter-wave behind it so the tilt peaks when the
+                 fish moves fastest
+     fish-wiggle tiny horizontal squash/stretch (0.6s) for a tail-beat feel
+   --flip mirrors the art so the fish faces the way it swims; --tilt-dir makes
+   "nose up" correct for each direction. */
+.fishes { position: absolute; inset: 0; pointer-events: none; }
+.fish {
+  position: absolute;
+  left: 0;
+  top: calc(var(--y) * 1vw);
+  width: calc(var(--w) * 1vw);
+  will-change: transform;
+  transform: translateX(-100vw); /* parked off-screen until the animation runs */
+  animation: var(--swim) var(--t, 16s) linear var(--delay, 0s) infinite;
+}
+.fish--ltr { --swim: swim-ltr; --tilt-dir: 1; }
+.fish--rtl { --swim: swim-rtl; --tilt-dir: -1; }
+.fish img {
+  display: block;
+  width: 100%;
+  transform: scaleX(var(--flip, 1));
+  animation:
+    fish-wave var(--wh, 3s) ease-in-out var(--wd, 0s) infinite alternate,
+    fish-tilt var(--wh, 3s) ease-in-out calc(var(--wd, 0s) - var(--wh, 3s) / 2) infinite alternate,
+    fish-wiggle .3s ease-in-out infinite alternate;
+}
+/* enter fully off one side, leave fully off the other */
+@keyframes swim-ltr {
+  from { transform: translateX(calc(var(--w) * -1vw - 2vw)); }
+  to   { transform: translateX(102vw); }
+}
+@keyframes swim-rtl {
+  from { transform: translateX(102vw); }
+  to   { transform: translateX(calc(var(--w) * -1vw - 2vw)); }
+}
+@keyframes fish-wave {          /* 3vw tall wave */
+  from { translate: 0 -1.5vw; }
+  to   { translate: 0 1.5vw; }
+}
+@keyframes fish-tilt {          /* from nose up to nose down */
+  from { rotate: calc(-3.5deg * var(--tilt-dir)); }
+  to   { rotate: calc(3.5deg * var(--tilt-dir)); }
+}
+@keyframes fish-wiggle {
+  from { scale: .97 1; }
+  to   { scale: 1.03 1; }
+}
+
+/* ---------- Resting bubbles ---------- */
+/* Own stacking layer (z-index 1) under the sponsors block (z-index 2), so the
+   heading and logos are on top and clickable. script.js sets per bubble:
+   --x/--y/--s (vw), --o opacity, z-index (small = in front), --bd bob delay,
+   --in settle delay, --nx (push sideways, clear of the logos) and --px/--py
+   (scroll parallax). */
+.bubbles {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.bubble {
+  pointer-events: auto;
+  opacity: var(--o, .8);
+  position: absolute;
+  left: calc(var(--x) * 1vw);
+  top: calc(var(--y) * 1vw);
+  width: calc(var(--s) * 1vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%)
+             translate(calc(var(--px, 0vw) + var(--nx, 0px)), var(--py, 0vw));
+  background: url("assets/bubble.png") center / contain no-repeat;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  animation: bubble-bob var(--d, 6s) ease-in-out var(--bd, 0s) infinite;
+  transition: opacity .3s ease, scale .3s ease;
+}
+.bubble.popped { opacity: 0; scale: 1.4; pointer-events: none; }
+/* gentle float up a little (and slightly sideways), then back */
+@keyframes bubble-bob {
+  0%, 100% { translate: 0 0; }
+  50%      { translate: .3vw -1.4vw; }
+}
+
+/* ---------- Bubble-up transition (script.js sets data-phase on .sea) ----------
+   armed   : waiting off-screen; resting bubbles and sponsors hidden
+   burst   : temporary .burst-bubble elements rise through the screen
+   settled : resting bubbles pop in with a bounce, the sponsors are revealed
+   No data-phase (reduced motion / no JS): the final layout, no transition. */
+.sea[data-phase="armed"] .bubble,
+.sea[data-phase="burst"] .bubble   { opacity: 0; scale: .4; }
+.sea[data-phase="armed"] .sponsors,
+.sea[data-phase="burst"] .sponsors { opacity: 0; scale: .94; }
+.sea[data-phase="settled"] .bubble {
+  animation:
+    bubble-in .8s cubic-bezier(.34, 1.56, .64, 1) var(--in, 0s) backwards,
+    bubble-bob var(--d, 6s) ease-in-out var(--bd, 0s) infinite;
+}
+.sea[data-phase="settled"] .sponsors {
+  animation: sponsors-reveal .7s cubic-bezier(.34, 1.4, .64, 1) .1s backwards;
+}
+@keyframes bubble-in {
+  from { opacity: 0; scale: .3; }
+  60%  { opacity: var(--o, .8); }
+  to   { opacity: var(--o, .8); scale: 1; }
+}
+@keyframes sponsors-reveal {
+  from { opacity: 0; scale: .9; }
+  to   { opacity: 1; scale: 1; }
+}
+/* the temporary burst: above everything, never clickable; animated by
+   script.js (Web Animations: transform + opacity only) and then removed */
+.burst {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+.burst-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  aspect-ratio: 1;
+  background: url("assets/bubble.png") center / contain no-repeat;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* ---------- Sponsors ---------- */
+.sponsors {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(28px, 6vw, 96px);  /* between heading and tiers */
+  /* the block spans the full width; only the heading and logos catch clicks,
+     so bubbles beside them can still be popped */
+  pointer-events: none;
+}
+.sponsors h2, .sponsor { pointer-events: auto; }
+.sponsors h2 {
+  margin: 0;
+  font: 700 clamp(2.8rem, 7vw, 6rem)/1 var(--font-hand);
+  color: var(--cream);
+  text-shadow: 0 3px 0 var(--ink), 0 0 24px rgba(29, 42, 68, .35);
+}
+/* several logos in a tier wrap onto centered rows */
+.tier {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(24px, 6vw, 110px);
+  max-width: 100%;
+  padding: 0 4vw;
+}
+.sponsor { display: block; transition: transform .2s ease; }
+.sponsor:hover, .sponsor:focus-visible { transform: scale(1.06); }
+.sponsor img { display: block; width: 100%; height: auto; }
+.tier--gold   .sponsor { width: clamp(180px, 24vw, 420px); }
+.tier--silver .sponsor { width: clamp(130px, 16vw, 300px); }
+.tier--bronze .sponsor { width: clamp(90px, 11vw, 200px); }
+/* phones: gold at least 60% of the screen (two golds wrap to one per row) */
+@media (max-width: 599px) {
+  .tier--gold .sponsor { width: max(60vw, 180px); }
+}
+
+.footer {
+  text-align: center;
+  padding: 2rem 1rem;
+  background: #3a96a2;
+  color: var(--cream);
+}
+.footer p {
+  margin: 0;
+  font: 700 clamp(1.6rem, 3vw, 2.2rem)/1.1 var(--font-hand);
+  letter-spacing: .02em;
+  text-shadow: 0 2px 0 var(--ink);
+}
+
+/* ===================== Reduced motion ===================== */
+/* No swimming, bobbing, drifting, parallax or bubble burst: script.js skips
+   the burst and parallax, so the sponsors show their final layout. The
+   countdown still updates. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .boat, .boat img, .blimp, .scroll-hint, .fish, .fish img, .bubble { animation: none; }
+  /* fish rest at their spots from the Figma frame */
+  .fish { transform: translateX(calc(var(--x) * 1vw)); }
+}
