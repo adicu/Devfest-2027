@@ -66,7 +66,8 @@
   </header>
 
   <!-- ============ CONTENT SECTIONS (fill these in!) ============ -->
-  <main class="content">
+  <main>
+  <div class="content content--top">
 
     <section id="about" class="section">
       <h2>About</h2>
@@ -93,26 +94,88 @@
       </ol>
     </section>
 
-    <section id="judges" class="section">
-      <h2>Judges &amp; Speakers</h2>
-      <div class="cards">
-        <article class="card person"><div class="avatar"></div><h3>Name</h3><p>Title, Company</p></article>
-        <article class="card person"><div class="avatar"></div><h3>Name</h3><p>Title, Company</p></article>
-        <article class="card person"><div class="avatar"></div><h3>Name</h3><p>Title, Company</p></article>
+  </div>
+
+  <!-- ============ SPEAKERS & JUDGES: subway platform ============ -->
+  <!-- Layers, back to front: platform painting, the far track (left-bound
+       train = SPEAKERS), the pillar, the near track (right-bound train =
+       JUDGES). While the section is on screen, script.js rolls one train
+       through at a time, car by car; the next one comes in as it leaves. -->
+  <section id="judges" class="subway" aria-labelledby="judges-title">
+    <h2 class="subway__sign" id="judges-title">
+      <img src="assets/sign-speakers-judges.png" alt="Speakers &amp; Judges" />
+    </h2>
+
+    <button class="sound-toggle" type="button" aria-pressed="true">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" />
+        <path class="icon-on" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />
+        <path class="icon-off" d="M16 9.5l5 5M21 9.5l-5 5" />
+      </svg>
+      <span class="sound-toggle__label">Sound on</span>
+    </button>
+
+    <!-- The upper half of the big bubbles rising out of the sea below:
+         in front of the painting, behind the trains (see .rising in CSS). -->
+    <div class="rising rising--subway" aria-hidden="true"></div>
+
+    <div class="pillar" aria-hidden="true">
+      <img class="pillar__img" src="assets/pillar.webp" alt="" />
+    </div>
+
+    <!-- One person per car: the name shows in the car's big window, the
+         info line on the panel under it. --win / --pan = where that car's
+         window / panel starts (% of the train, measured from the art) - leave
+         them as they are and just change the text. -->
+    <div class="tracks">
+      <!-- far track: heads LEFT (front = left end) - SPEAKERS -->
+      <div class="track track--far">
+        <div class="train train--left" role="list" aria-label="Speakers">
+          <img src="assets/train-left.webp" alt="" />
+          <div class="rider" role="listitem" style="--win:10.61;--pan:6.47"><p class="rider__name">Speaker Name</p><p class="rider__info">Title, Company</p></div>
+          <div class="rider" role="listitem" style="--win:35.06;--pan:30.92"><p class="rider__name">Speaker Name</p><p class="rider__info">Title, Company</p></div>
+          <div class="rider" role="listitem" style="--win:59.78;--pan:55.61"><p class="rider__name">Speaker Name</p><p class="rider__info">Title, Company</p></div>
+          <div class="rider" role="listitem" style="--win:84.19;--pan:80.06"><p class="rider__name">Speaker Name</p><p class="rider__info">Title, Company</p></div>
+          <span class="light light--head" aria-hidden="true"></span>
+          <span class="light light--tail" aria-hidden="true"></span>
+        </div>
       </div>
-    </section>
+      <!-- near track: heads RIGHT (front = right end) - JUDGES -->
+      <div class="track track--near">
+        <div class="train train--right" role="list" aria-label="Judges">
+          <img src="assets/train-right.webp" alt="" />
+          <div class="rider" role="listitem" style="--win:7.19;--pan:7.19"><p class="rider__name">Judge Name</p><p class="rider__info">Title, Company</p></div>
+          <div class="rider" role="listitem" style="--win:31.64;--pan:31.64"><p class="rider__name">Judge Name</p><p class="rider__info">Title, Company</p></div>
+          <div class="rider" role="listitem" style="--win:56.33;--pan:56.33"><p class="rider__name">Judge Name</p><p class="rider__info">Title, Company</p></div>
+          <div class="rider" role="listitem" style="--win:80.78;--pan:80.78"><p class="rider__name">Judge Name</p><p class="rider__info">Title, Company</p></div>
+          <span class="light light--head" aria-hidden="true"></span>
+          <span class="light light--tail" aria-hidden="true"></span>
+        </div>
+      </div>
+    </div>
 
-    <section id="faq" class="section">
-      <h2>FAQ</h2>
-      <details><summary>Who can participate?</summary><p>Answer goes here.</p></details>
-      <details><summary>Do I need a team?</summary><p>Answer goes here.</p></details>
-      <details><summary>How much does it cost?</summary><p>Answer goes here.</p></details>
-    </section>
-
-  </main>
+    <!-- One dot per car of the train that's in the station (script.js fills
+         in the labels and moves this row under that train). A dot slides
+         that car to the middle and pauses; the button pauses / plays. -->
+    <div class="car-dots" role="group" aria-label="Train cars" hidden>
+      <button class="car-dot" type="button"></button>
+      <button class="car-dot" type="button"></button>
+      <button class="car-dot" type="button"></button>
+      <button class="car-dot" type="button"></button>
+      <button class="car-play" type="button" aria-label="Pause the trains">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+          <path class="icon-pause" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
+          <path class="icon-play" d="M8 5l11 7-11 7z" />
+        </svg>
+      </button>
+    </div>
+  </section>
 
   <!-- ============ SPONSORS: underwater ============ -->
   <section id="sponsors" class="sea" aria-labelledby="sponsors-title">
+    <!-- Big bubbles rising out of the sea into the subway section above
+         (twinned with .rising--subway there; script.js fills both). -->
+    <div class="rising rising--sea" aria-hidden="true"></div>
     <!-- Fish swim all the way across, above the "Sponsors" heading (which starts at 64vw).
          fish--ltr = swims left-to-right, fish--rtl = right-to-left.
          --y top and --w width in vw (keep --y + height + 2vw under ~62)
@@ -133,23 +196,40 @@
 
     <!-- Bubbles are generated by script.js (click one to pop it!) -->
     <div class="bubbles" aria-hidden="true"></div>
-    <!-- Temporary "bubble up" burst bubbles go here while it plays (script.js) -->
-    <div class="burst" aria-hidden="true"></div>
+    <!-- The "bubble up" burst plays in a page-level layer (script.js
+         .burst-layer) so it can rise out of this section into the one above. -->
 
     <div class="sponsors">
       <h2 id="sponsors-title">Sponsors</h2>
-      <!-- Swap the placeholder images for real logos. Add more <a> tags per row. -->
+      <!-- One logo per sponsor; add more per tier (they wrap onto rows).
+           Swap the placeholder image for the real logo and put the sponsor's
+           name in alt.
+           No website yet: a plain <div class="sponsor"> (not clickable):
+             <div class="sponsor"><img src="assets/acme.png" alt="Acme" /></div>
+           With a website: use a link that opens it in a new tab:
+             <a class="sponsor" href="https://acme.com" target="_blank" rel="noopener"><img src="assets/acme.png" alt="Acme" /></a>
+           (Never href="#": that just jumps back to the top of the page.) -->
       <div class="tier tier--gold">
-        <a class="sponsor" href="#"><img src="assets/sponsor-placeholder.png" alt="Sponsor name" /></a>
+        <div class="sponsor"><img src="assets/sponsor-placeholder.png" alt="Sponsor name" /></div>
       </div>
       <div class="tier tier--silver">
-        <a class="sponsor" href="#"><img src="assets/sponsor-placeholder.png" alt="Sponsor name" /></a>
+        <div class="sponsor"><img src="assets/sponsor-placeholder.png" alt="Sponsor name" /></div>
       </div>
       <div class="tier tier--bronze">
-        <a class="sponsor" href="#"><img src="assets/sponsor-placeholder.png" alt="Sponsor name" /></a>
+        <div class="sponsor"><img src="assets/sponsor-placeholder.png" alt="Sponsor name" /></div>
       </div>
     </div>
   </section>
+
+  <div class="content content--bottom">
+    <section id="faq" class="section">
+      <h2>FAQ</h2>
+      <details><summary>Who can participate?</summary><p>Answer goes here.</p></details>
+      <details><summary>Do I need a team?</summary><p>Answer goes here.</p></details>
+      <details><summary>How much does it cost?</summary><p>Answer goes here.</p></details>
+    </section>
+  </div>
+  </main>
 
   <footer class="footer">
     <p>DevFest 2027</p>

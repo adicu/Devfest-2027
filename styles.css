@@ -64,10 +64,11 @@ body {
 .stage {
   --crop-top-max: 0.163;
   --keep-bottom: 0.915;
-  /* Blimp (see .blimp below). Width: 39% of the art, but at least 580px so
-     the two-line countdown fits at full size, and never wider than the window. */
-  --blimp-w: 0.39;
-  --bw: min(max(var(--blimp-w) * var(--art-w), 580px), 96cqw);
+  /* Blimp (see .blimp below). Width: 65% of the art, but at least 936px, and
+     never wider than the window. Its bottom stays above the drawn building
+     labels (the highest, FAQ, is 34% down; the blimp ends ~25% down). */
+  --blimp-w: 0.65;
+  --bw: min(max(var(--blimp-w) * var(--art-w), 936px), 96cqw);
   /* 3% from the art's top, or just below the window's top when the sky is cropped */
   --blimp-top: max(3%, -1 * var(--art-top) + 1.5cqh);
   /* Boat (see .boat below). Visible water = the art's bottom 12% minus
@@ -96,11 +97,11 @@ body {
 }
 /* Portrait: covering would cut off most buildings, so fit the full width,
    anchor to the bottom and show the sky color above. */
-/* Phones (under 600px wide): the blimp is 85% of the screen (at least 320px)
+/* Phones (under 600px wide): the blimp is nearly the full screen width
    and shows the compact one-line countdown. */
 @container (width < 600px) {
   .stage {
-    --bw: min(max(85cqw, 320px), 96cqw);
+    --bw: 96cqw;
     /* boat: 28% of the screen; small drift so it clears the Schedule hotspot */
     --boat-w: 28cqw;
     --bdrift: 0.02;
@@ -252,6 +253,7 @@ body {
   width: var(--bw);
   animation: float 5s ease-in-out infinite;
   z-index: 2;
+  pointer-events: none;        /* decoration: never blocks a building link */
 }
 .blimp img { width: 100%; display: block; }
 /* The blimp is a size container, so cqw below = % of the blimp's width and the
@@ -273,18 +275,34 @@ body {
   color: var(--ink);
   white-space: nowrap;
 }
-/* Sizes scale with the blimp (cqw = % of its width) between readable minimums
-   and sensible maximums. The blimp is >= 580px in this two-line mode, which is
-   what these minimums need to fit the banner. */
-.blimp__date  { font-size: clamp(18px, 3.1cqw, 28px); font-weight: 700; }
-.blimp__count { font-size: clamp(28px, 4.9cqw, 46px); font-weight: 700; word-spacing: .12em; }
+/* Sizes scale with the blimp (cqw = % of its width). The text never shrinks
+   below its minimum; instead the blimp is made big enough (see --bw): at
+   3.5cqw "89 days 04 hrs 12 min 45 sec" takes about 80% of the banner, and
+   the two-line form only shows when the blimp is 660px+ wide, where 3.5cqw is
+   already 23px+ (so the 24px minimum still fits). Numbers sit in fixed-width
+   slots (script.js .cd-num) so nothing jiggles as the seconds change. */
+.blimp__date  { font-size: clamp(18px, 3cqw, 40px); font-weight: 700; }
+.blimp__count {
+  font-size: clamp(24px, 3.5cqw, 58px);
+  font-weight: 700;
+  word-spacing: .12em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.cd-num {                      /* --digit-w = widest digit, measured by script.js */
+  display: inline-block;
+  width: calc(var(--digit-w, .56em) * var(--n, 2));
+  text-align: center;
+  word-spacing: normal;
+}
 .cd-short { display: none; }
-/* Phone-size blimp (< 580px): one line, compact form ("89d 04h 12m") */
-@container (max-width: 579px) {
+/* Smaller blimp (< 660px, i.e. phones): one line, compact "89d 04h 12m 45s",
+   16px+ (at 6cqw it fills about 83% of the banner). */
+@container (max-width: 659px) {
   .blimp__date { display: none; }
   .cd-long  { display: none; }
   .cd-short { display: inline; }
-  .blimp__count { font-size: clamp(18px, 8.2cqw, 34px); }
+  .blimp__count { font-size: clamp(16px, 6cqw, 30px); }
 }
 /* For screen readers only (the countdown's once-a-minute live region) */
 .sr-only {
@@ -318,12 +336,20 @@ body {
 @keyframes nudge { 50% { translate: 0 6px; } }
 
 /* ===================== CONTENT ===================== */
+/* Split in two:
+   top:    sunset water -> deep (meets the subway's top fade)
+   bottom: the FAQ under the Sponsors: sea -> deep */
 .content {
   position: relative;
-  /* sunset water -> deep -> back up to the bright sea of the Sponsors section */
-  background: linear-gradient(var(--water-sunset), var(--water-deep) 30%,
-                              var(--water-deep) 70%, var(--sea-top));
   padding: 4rem 1.25rem 10rem;
+}
+.content--top {
+  background: linear-gradient(var(--water-sunset), var(--water-deep) 45%);
+  padding-bottom: 4rem;
+}
+.content--bottom {
+  background: linear-gradient(#4ca8b3, var(--water-deep) 14rem);
+  padding-bottom: 6rem;
 }
 .section {
   max-width: 960px;
@@ -390,6 +416,342 @@ details {
 summary { cursor: pointer; font: 700 1.5rem var(--font-hand); }
 details p { margin: .6rem 0 0; }
 
+
+/* ===================== SPEAKERS & JUDGES (subway) ===================== */
+/* Full-width platform scene, right above the Sponsors. Back to front:
+     z0  the painting + bottom fade
+     z1  far track   - left-bound train  (speakers)
+     z2  pillar      - in front of the left-bound train...
+     z3  near track  - ...behind the right-bound train (judges)
+     z4  top fade
+     z5  sign, sound button
+   Both trains are the same size (--th tall: about one and a half cars per
+   screen on desktop, one car on phones). One train at a time rolls through
+   car by car (script.js); each car carries one person (name in the big
+   window, info on the panel under it). The row of car dots sits under
+   whichever train is in the station.
+   The painting covers the section anchored to the bottom, and the section is
+   never shorter than the painting's own aspect, so the painting is exactly
+   as tall as the section and the tracks can be placed in % of its height:
+     near track: wheels on the rails at the bottom (1% up, plus room for the
+                 car dots under it)
+     far track:  wheels in the dark pit under the platform edge (26% up), or
+                 higher if needed so it clears the near track. */
+.subway {
+  --th: clamp(375px, 32.4vw, 660px);       /* train height (both trains) */
+  --near-bottom: calc(1% + 3rem);          /* 3rem = room for the car dots */
+  --far-bottom: max(26%, calc(var(--near-bottom) + var(--th) * .55));
+  --sign-w: clamp(240px, 32vw, 540px);
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;                         /* trains enter/leave off-screen */
+  /* the painting's 2360 x 1640, or taller when the trains + sign need it */
+  height: max(69.5vw, calc(var(--th) * 1.6 + 13rem));
+  background: #232a24 url("assets/subway.jpg") center bottom / cover no-repeat;
+}
+.subway::before,
+.subway::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+.subway::before {                           /* blend in from the section above */
+  top: 0;
+  height: clamp(3rem, 8vw, 7rem);
+  background: linear-gradient(var(--water-deep), transparent);
+  z-index: 4;
+}
+.subway::after {                            /* ...and down into the sea below */
+  bottom: 0;
+  height: 2.5rem;
+  background: linear-gradient(transparent, var(--sea-top));
+  z-index: 0;
+}
+
+/* ---------- Hanging sign (top left) ---------- */
+.subway__sign {
+  position: absolute;
+  top: 0;                                   /* its poles run up to the ceiling */
+  left: 4vw;
+  width: var(--sign-w);
+  margin: 0;
+  z-index: 5;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .35));
+  transform-origin: 50% 0;
+  animation: sign-sway 6s ease-in-out infinite;
+}
+.subway__sign img { display: block; width: 100%; height: auto; }
+@keyframes sign-sway {
+  0%, 100% { rotate: -.6deg; }
+  50%      { rotate: .6deg; }
+}
+
+/* ---------- Sound on/off ---------- */
+.sound-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 4vw;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: .4em;
+  padding: .25em .9em .25em .7em;
+  font: 700 1.15rem/1.2 var(--font-hand);
+  color: var(--ink);
+  background: var(--cream);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.sound-toggle:hover { transform: translateY(1px); box-shadow: 0 2px 0 var(--ink); }
+.sound-toggle:focus-visible { outline: 3px solid var(--glow); outline-offset: 2px; }
+.sound-toggle svg { display: block; width: 1.1em; height: 1.1em; }
+.sound-toggle[aria-pressed="true"]  .icon-off { display: none; }
+.sound-toggle[aria-pressed="false"] .icon-on  { display: none; }
+/* phones: below the sign instead of beside it */
+@media (max-width: 599px) {
+  .sound-toggle { top: calc(var(--sign-w) * 0.2 + .6rem); left: 4vw; right: auto; font-size: 1rem; }
+  .subway .pillar { max-width: 14vw; }   /* narrow: stays clear of the names */
+}
+
+/* ---------- Pillar ---------- */
+/* The original drawing, whole: scaled to the height from the floor between
+   the tracks up to the ceiling, proportions kept (aspect-ratio = the image's
+   346 x 1228), never stretched, repeated or cropped. If that would make it
+   wider than 16.5vw (14vw on phones), it's capped there and the drawing scales down,
+   standing on the floor (object-position: bottom) instead of reaching the
+   ceiling. In front of the far train, its base hidden behind the near one.
+   script.js sets --pillar-x so it's clear of the names. */
+.pillar {
+  --pillar-floor: calc(var(--near-bottom) + var(--th) * .2);
+  position: absolute;
+  bottom: var(--pillar-floor);
+  height: calc(100% - var(--pillar-floor));
+  aspect-ratio: 346 / 1228;
+  max-width: 16.5vw;
+  left: var(--pillar-x, 50%);
+  translate: -50% 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.pillar__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: 50% 100%;
+}
+
+/* ---------- Tracks ---------- */
+/* Full-width rows placed on the painting's tracks (see .subway). No z-index
+   on .tracks itself, so the rows and the pillar layer against each other. */
+.tracks { position: absolute; inset: 0; pointer-events: none; }
+.track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--th);
+  font-size: var(--th);                     /* em = train height (lights) */
+}
+.track--far  { bottom: var(--far-bottom); z-index: 1; }
+.track--near { bottom: var(--near-bottom); z-index: 3; }
+
+/* ---------- Car dots ---------- */
+/* Under the train in the station (data-track, set by script.js). The dot of
+   the car nearest the middle of the screen is lit (aria-current). Buttons
+   are 32px to tap; the dot is drawn inside. */
+.car-dots {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: .15rem;
+  padding: .2rem .35rem;
+  background: rgba(16, 26, 24, .6);
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+  transition: bottom .5s ease;
+}
+.car-dots[hidden] { display: none; }
+.car-dots[data-track="near"] { bottom: calc(var(--near-bottom) - 2.75rem); }
+.car-dots[data-track="far"]  { bottom: calc(var(--far-bottom) - 2.75rem); }
+.car-dot,
+.car-play {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.car-dot::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--cream);
+  transition: background .25s ease, scale .25s ease, box-shadow .25s ease;
+}
+.car-dot:hover::before { background: rgba(246, 231, 200, .45); }
+.car-dot[aria-current="true"]::before {
+  background: var(--glow);
+  border-color: var(--glow);
+  scale: 1.25;
+  box-shadow: 0 0 8px rgba(255, 233, 168, .8);
+}
+.car-play {
+  margin-left: .2rem;
+  width: 28px;
+  height: 28px;
+  background: var(--cream);
+}
+.car-play svg { width: 16px; height: 16px; }
+.car-play .icon-play { display: none; }
+.subway[data-held] .car-play .icon-play  { display: inline; }
+.subway[data-held] .car-play .icon-pause { display: none; }
+.car-play[hidden] { display: none; }
+.car-dot:focus-visible,
+.car-play:focus-visible { outline: 3px solid var(--glow); outline-offset: 1px; }
+
+
+/* ---------- Trains ---------- */
+/* script.js moves them (translate, in px), sets data-state
+   (waiting -> arrive -> stopped -> depart -> waiting) and data-moving while
+   a car-length slide is under way. No JS: parked in the middle. */
+.train {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: var(--th);
+  aspect-ratio: 3600 / 406;
+  translate: calc(50vw - 50%) 0;
+  pointer-events: auto;
+}
+.train > img {
+  position: relative;
+  z-index: 1;                               /* frame on top of the window glow */
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.train--left { filter: brightness(.94); }   /* a touch further away */
+.train[data-state="waiting"] { visibility: hidden; }
+.subway[data-paused] .train > img { animation-play-state: paused; }
+.train[data-moving] > img {
+  animation: train-rumble .14s linear infinite alternate;
+}
+@keyframes train-rumble {
+  from { translate: 0 0; }
+  to   { translate: 0 .012em; }
+}
+
+/* ---------- People in the cars ---------- */
+/* Name: on a warm lit "window" behind the frame (the big window is 8.58% of
+   the train wide, 30-63% down). Info: on the panel under the windows. */
+.rider { display: contents; }
+.rider__name,
+.rider__info {
+  position: absolute;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--ink);
+  overflow: hidden;
+}
+.rider__name {
+  z-index: 0;                               /* behind the frame */
+  left: calc(var(--win) * 1%);
+  width: 8.58%;
+  top: 29.5%;
+  height: 33.5%;
+  padding: 0 .06em;
+  background: radial-gradient(ellipse at 50% 40%, #fff6dc, #f6e3b4);
+  font: 700 max(14px, calc(var(--th) * .105))/1 var(--font-hand);
+  overflow-wrap: anywhere;
+}
+.rider__info {
+  z-index: 2;                               /* painted on the car's panel */
+  left: calc(var(--pan) * 1%);
+  width: 12.7%;
+  top: 66%;
+  height: 15%;
+  font: 700 max(11px, calc(var(--th) * .068))/1.1 var(--font-body);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Lights ---------- */
+/* Headlights (warm yellow, with a beam ahead) on the FRONT end while pulling
+   in; red tail lights on the BACK end while pulling out. Placed on the body's
+   end edge (measured from the art): left-bound body 0.4% - 96.9%,
+   right-bound 3.1% - 99.6%; 74% down. Sizes in em = train height. */
+.light {
+  position: absolute;
+  z-index: 3;
+  top: 74%;
+  width: .085em;
+  height: .085em;
+  margin: -.0425em 0 0 -.0425em;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity .6s ease;
+}
+.light--head {
+  background: #fffbe3;
+  box-shadow: 0 0 .05em .03em #fff3c4,
+              0 0 .35em .14em rgba(255, 233, 150, .7),
+              0 0 .9em .3em rgba(255, 228, 140, .3);
+}
+.light--head::after {                       /* soft beam ahead of the train */
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 2.4em;
+  height: .6em;
+  translate: 0 -50%;
+  background: linear-gradient(var(--beam-dir), rgba(255, 238, 170, .5), rgba(255, 238, 170, 0) 85%);
+  clip-path: polygon(var(--beam-clip));
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+.light--tail {
+  background: #ff6a55;
+  box-shadow: 0 0 .05em .03em #ff4a36,
+              0 0 .3em .12em rgba(255, 60, 40, .7),
+              0 0 .8em .28em rgba(255, 40, 30, .3);
+}
+.train--left  .light--head { left: .4%; }
+.train--left  .light--tail { left: 96.9%; }
+.train--right .light--head { left: 99.6%; }
+.train--right .light--tail { left: 3.1%; }
+.train--left .light--head::after {          /* beam points left */
+  right: 50%;
+  --beam-dir: to left;
+  --beam-clip: 100% 45%, 0 0, 0 100%, 100% 55%;
+}
+.train--right .light--head::after {         /* beam points right */
+  left: 50%;
+  --beam-dir: to right;
+  --beam-clip: 0 45%, 100% 0, 100% 100%, 0 55%;
+}
+.train[data-state="arrive"]  .light--head { opacity: 1; }
+.train[data-state="stopped"] .light--head { opacity: .3; }
+.train[data-state="depart"]  .light--tail { opacity: 1; transition-duration: .3s; }
+.train[data-state="depart"]  .light--head { transition-duration: .3s; }
 
 /* ===================== SPONSORS (underwater) ===================== */
 /* Positions use vw so the layout scales like the Figma frame (448 x 505 ->
@@ -458,6 +820,50 @@ details p { margin: .6rem 0 0; }
   to   { scale: 1.03 1; }
 }
 
+/* ---------- Big bubbles rising out of the sea ---------- */
+/* Big bubbles (10vw+) drift up out of the sea, across its top edge and up
+   into the subway section, fading out as they go. The subway section is its
+   own layer (so its trains can sit in front), so each bubble is drawn twice
+   with identical position, size and timing: once in .rising--sea (clipped at
+   the sea's top edge) and once in .rising--subway (clipped at the subway's
+   bottom edge, behind the trains and their names). Together they read as one
+   bubble crossing over. Both strips are --rise-h tall: 45vw of sea plus
+   --rise-up of subway. Never clickable. script.js adds the bubbles. */
+.rising {
+  --rise-up: min(70vh, 640px);
+  --rise-h: calc(var(--rise-up) + 45vw);
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--rise-h);
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(transparent, #000 55%);
+  mask-image: linear-gradient(transparent, #000 55%);
+}
+.rising--sea    { top: calc(-1 * var(--rise-up)); z-index: 1; }   /* under the sponsors (z 2) */
+.rising--subway { top: calc(100% - var(--rise-up)); z-index: 1; } /* under the trains (later in the DOM) */
+.rise-bubble {
+  position: absolute;
+  top: 100%;                   /* starts just below the strip */
+  left: calc(var(--x) * 1%);
+  width: calc(var(--s) * 1vw);
+  aspect-ratio: 1;
+  background: url("assets/bubble.png") center / contain no-repeat;
+  opacity: 0;
+  animation: rise var(--t) linear var(--d) infinite,
+             rise-sway var(--w) ease-in-out var(--d) infinite alternate;
+}
+@keyframes rise {
+  0%   { translate: 0 0;                                  opacity: 0; }
+  8%   { opacity: .75; }
+  100% { translate: 0 calc(-1 * var(--rise-h) - 100%);    opacity: .75; }
+}
+@keyframes rise-sway {
+  from { transform: translateX(-1vw); }
+  to   { transform: translateX(1vw); }
+}
+
 /* ---------- Resting bubbles ---------- */
 /* Own stacking layer (z-index 1) under the sponsors block (z-index 2), so the
    heading and logos are on top and clickable. script.js sets per bubble:
@@ -467,6 +873,7 @@ details p { margin: .6rem 0 0; }
 .bubbles {
   position: absolute;
   inset: 0;
+  overflow: hidden;            /* resting bubbles stay inside the sea */
   z-index: 1;
   pointer-events: none;
 }
@@ -522,10 +929,12 @@ details p { margin: .6rem 0 0; }
 }
 /* the temporary burst: above everything, never clickable; animated by
    script.js (Web Animations: transform + opacity only) and then removed */
-.burst {
+.burst-layer {                 /* placed over the sea + subway by script.js */
   position: absolute;
-  inset: 0;
-  z-index: 4;
+  left: 0;
+  width: 100%;
+  overflow: hidden;            /* no sideways scrollbar from the wobble */
+  z-index: 60;                 /* over the subway section's trains and signs */
   pointer-events: none;
 }
 .burst-bubble {
@@ -545,7 +954,7 @@ details p { margin: .6rem 0 0; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(28px, 6vw, 96px);  /* between heading and tiers */
+  gap: clamp(20px, 4.2vw, 67px);  /* between heading and tiers */
   /* the block spans the full width; only the heading and logos catch clicks,
      so bubbles beside them can still be popped */
   pointer-events: none;
@@ -563,20 +972,18 @@ details p { margin: .6rem 0 0; }
   flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: clamp(24px, 6vw, 110px);
+  gap: clamp(17px, 4.2vw, 77px);
   max-width: 100%;
   padding: 0 4vw;
 }
-.sponsor { display: block; transition: transform .2s ease; }
-.sponsor:hover, .sponsor:focus-visible { transform: scale(1.06); }
+.sponsor { display: block; cursor: default; }
+/* only real links react (a sponsor with a website) */
+a.sponsor { cursor: pointer; transition: transform .2s ease; }
+a.sponsor:hover, a.sponsor:focus-visible { transform: scale(1.06); }
 .sponsor img { display: block; width: 100%; height: auto; }
-.tier--gold   .sponsor { width: clamp(180px, 24vw, 420px); }
-.tier--silver .sponsor { width: clamp(130px, 16vw, 300px); }
-.tier--bronze .sponsor { width: clamp(90px, 11vw, 200px); }
-/* phones: gold at least 60% of the screen (two golds wrap to one per row) */
-@media (max-width: 599px) {
-  .tier--gold .sponsor { width: max(60vw, 180px); }
-}
+.tier--gold   .sponsor { width: clamp(100px, 11vw, 200px); }
+.tier--silver .sponsor { width: clamp(75px, 8vw, 145px); }
+.tier--bronze .sponsor { width: clamp(55px, 5.5vw, 100px); }
 
 .footer {
   text-align: center;
@@ -597,7 +1004,9 @@ details p { margin: .6rem 0 0; }
    countdown still updates. */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .boat, .boat img, .blimp, .scroll-hint, .fish, .fish img, .bubble { animation: none; }
+  .boat, .boat img, .blimp, .scroll-hint, .fish, .fish img, .bubble,
+  .subway__sign { animation: none; }
+  .rising { display: none; }
   /* fish rest at their spots from the Figma frame */
   .fish { transform: translateX(calc(var(--x) * 1vw)); }
 }
