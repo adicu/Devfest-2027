@@ -190,10 +190,13 @@
       : [];
     const margin = 3 * vw; // room for the sideways sway
     for (const b of bubbles) {
-      const y = b.y < HEADING_Y ? b.y : HEADING_Y + (b.y - HEADING_Y) * stretch;
-      b.el.style.setProperty("--y", y.toFixed(2));
       const r = (b.s / 2) * vw;
       const drift = (b.rise / 2 + 1.6) * vw; // scroll drift + bob, up or down
+      let y = b.y < HEADING_Y ? b.y : HEADING_Y + (b.y - HEADING_Y) * stretch;
+      // keep the whole bubble (with its bob and drift) above the sea's bottom
+      // edge, so the FAQ below never slices one in half
+      y = Math.min(y, seaHvw - (r + drift) / vw - 1);
+      b.el.style.setProperty("--y", y.toFixed(2));
       const cy = y * vw;
       let cx = b.x * vw;
       for (let pass = 0; pass < 4; pass++) {
@@ -1186,4 +1189,583 @@
   window.addEventListener("scroll", () => { onScroll(); requestBubbles(); }, { passive: true });
   window.addEventListener("resize", () => { onScroll(); layoutBubbles(); requestBubbles(); });
   update();
+})();
+
+// ---------- FAQ: the reef ----------
+// One answer open at a time. The bear swims along the dashed line: to the
+// height of your mouse anywhere in the FAQ (else the question you tabbed to,
+// else the open one, else the first), and its lantern lights the number it's
+// next to. The line is redrawn through the number circles whenever the list
+// changes size (an answer opening or closing, a resize, the font loading).
+(() => {
+  const faq = document.querySelector(".faq");
+  if (!faq) return;
+
+  // drifting specks in the twilight water (same every visit: seeded, not random)
+  const motes = document.querySelector(".reef__motes");
+  if (motes) {
+    const R = (i, n) => ((Math.sin(i * 91.17 + n * 47.3) * 43758.5453) % 1 + 1) % 1;
+    for (let i = 0; i < 18; i++) {
+      const t = 16 + R(i, 1) * 14;              // 16-30 s to drift up
+      const m = document.createElement("span");
+      m.className = "mote";
+      m.style.cssText = `--x:${(3 + R(i, 2) * 94).toFixed(1)};--s:${(2 + R(i, 3) * 3.5).toFixed(1)}px;` +
+        `--t:${t.toFixed(1)}s;--d:-${(R(i, 4) * t).toFixed(1)}s;--o:${(0.35 + R(i, 5) * 0.5).toFixed(2)}`;
+      motes.appendChild(m);
+    }
+  }
+  const list = faq.querySelector(".faq__list");
+  const items = [...faq.querySelectorAll(".faq__item")];
+  const buttons = items.map((li) => li.querySelector(".faq__q"));
+  const path = faq.querySelector(".faq__line");
+  const revealPath = faq.querySelector(".faq__path-reveal");
+  let pathParts = null;          // the line, and its length up to each number
+  const bear = faq.querySelector(".faq__bear");
+  const bearImg = bear && bear.querySelector("img");
+  let openIdx = -1;
+  let focusIdx = -1;
+  const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let geo = null;                // number centers + the line's length up to each
+  let pointerY = null;           // mouse height in .faq px, while it's over the FAQ
+  let followTip = false;         // while the line draws, the bear rides its tip
+
+  // A little group of bubbles that drift up and fade (the bear's trail).
+  // x, y = where they start, in the container's px. Opacity + transform only;
+  // each removes itself when done.
+  function puff(container, x, y, n, spread, scale = 1) {
+    for (let i = 0; i < n; i++) {
+      // a mix of sizes: mostly small, some medium, now and then a big one
+      const r = Math.random();
+      const s = scale * (r < 0.55 ? 6 + Math.random() * 6 : r < 0.88 ? 12 + Math.random() * 10 : 22 + Math.random() * 14);
+      const b = document.createElement("span");
+      b.className = "puff";
+      b.style.width = `${s.toFixed(1)}px`;
+      const x0 = x + (Math.random() - 0.5) * spread - s / 2;
+      const y0 = y + (Math.random() - 0.5) * spread * 0.6 - s / 2;
+      const rise = 60 + s * 3 + Math.random() * 60, drift = (Math.random() - 0.5) * (20 + s);   // big ones float further
+      container.appendChild(b);
+      b.animate([
+        { transform: `translate(${x0.toFixed(1)}px, ${y0.toFixed(1)}px) scale(.5)`, opacity: 0 },
+        { transform: `translate(${(x0 + drift * 0.3).toFixed(1)}px, ${(y0 - rise * 0.25).toFixed(1)}px) scale(1)`, opacity: .9, offset: 0.2 },
+        { transform: `translate(${(x0 + drift).toFixed(1)}px, ${(y0 - rise).toFixed(1)}px) scale(1.05)`, opacity: 0 }
+      ], { duration: 1000 + s * 30 + Math.random() * 700, easing: "ease-out", fill: "forwards" }).onfinish = () => b.remove();
+    }
+  }
+  // ----- The sign: little bubbles rise from the bubbles drawn by its "Q"
+  // every few seconds, and it swings on its ropes (letting out a puff) when
+  // you point at it or tap it. None of it with reduced motion. -----
+  const reefSec = document.querySelector(".reef");
+  const sign = document.querySelector(".reef__sign");
+  const signImg = sign && sign.querySelector("img");
+  if (reefSec && signImg && !calm) {
+    const signBubbles = document.createElement("div");
+    signBubbles.className = "reef__sign-bubbles";
+    signBubbles.setAttribute("aria-hidden", "true");
+    reefSec.insertBefore(signBubbles, sign);
+    const fromSign = (n, spread, scale) => {      // the drawn bubbles: 82% across, 60% down the art
+      const R = reefSec.getBoundingClientRect(), S = signImg.getBoundingClientRect();
+      puff(signBubbles, S.left - R.left + S.width * 0.82, S.top - R.top + S.height * 0.6, n, spread, scale);
+    };
+    let signOnScreen = false;
+    new IntersectionObserver((e) => { signOnScreen = e[0].isIntersecting; }).observe(sign);
+    (function drip() {
+      if (signOnScreen && !document.hidden) fromSign(1 + (Math.random() < 0.35 ? 1 : 0), 10, 0.55);
+      setTimeout(drip, 1800 + Math.random() * 2400);
+    })();
+    let swinging = null;
+    const swing = () => {
+      if (swinging && swinging.playState === "running") return;
+      swinging = signImg.animate([
+        { rotate: "0deg" }, { rotate: "6deg" }, { rotate: "-4.5deg" }, { rotate: "3deg" },
+        { rotate: "-1.8deg" }, { rotate: "0.8deg" }, { rotate: "0deg" }
+      ], { duration: 1900, easing: "ease-in-out" });   // a damped swing, settling back
+      fromSign(4, 26, 0.75);
+    };
+    sign.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") swing(); });
+    sign.addEventListener("click", swing);
+
+    // the first time the FAQ comes into view, the sign is let down on its
+    // ropes from the surface and bounces to a stop
+    const dropIn = () => signImg.animate([
+      { translate: "0 -125%" }, { translate: "0 5%", offset: 0.6 },
+      { translate: "0 -2.5%", offset: 0.8 }, { translate: "0 0" }
+    ], { duration: 1500, easing: "cubic-bezier(.3,.6,.35,1)" });
+    const signTop = signImg.getBoundingClientRect().top;
+    if (signTop > window.innerHeight) {          // not on screen yet: wait up above
+      signImg.style.translate = "0 -125%";
+      const io = new IntersectionObserver((e) => {
+        if (!e[0].isIntersecting) return;
+        io.disconnect();
+        signImg.style.translate = "";
+        dropIn();
+      }, { threshold: 0.01 });
+      io.observe(sign);
+    }
+
+    // Tap the water: a little burst of bubbles rises from where you tapped
+    // (FAQ only; the questions, links, pearls and sign keep their own taps).
+    reefSec.addEventListener("click", (e) => {
+      if (e.target.closest("button, a, .pearl, .reef__sign")) return;
+      const R = reefSec.getBoundingClientRect();
+      puff(signBubbles, e.clientX - R.left, e.clientY - R.top, 6, 26, 0.9);
+    });
+
+    // the pearls flare when you point at one or tap it, and let out a few bubbles
+    document.querySelectorAll(".pearl").forEach((pearl) => {
+      const flare = () => {
+        const glow = pearl.animate([{ filter: "brightness(1)", scale: "1" }, { filter: "brightness(1.8)", scale: "1.6" },
+          { filter: "brightness(1)", scale: "1" }], { duration: 900, easing: "ease-out" });
+        const R = reefSec.getBoundingClientRect(), P = pearl.getBoundingClientRect();
+        puff(signBubbles, P.left - R.left + P.width / 2, P.top - R.top + P.height / 3, 4, 14, 0.7);
+        return glow;
+      };
+      pearl.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") flare(); });
+      pearl.addEventListener("click", flare);
+    });
+  }
+
+  const trail = document.createElement("div");       // the real bear's trail, under the bear
+  trail.className = "faq__trail";
+  trail.setAttribute("aria-hidden", "true");
+  faq.insertBefore(trail, faq.firstChild);          // first, so the questions stay on top
+  let trailAcc = 0;
+
+  function setOpen(i) {
+    openIdx = i;
+    items.forEach((li, j) => {
+      li.classList.toggle("is-open", j === i);
+      buttons[j].setAttribute("aria-expanded", String(j === i));
+    });
+    layout();
+  }
+
+  // Center of each number circle, in .faq's coordinates.
+  function markerCenters() {
+    const f = faq.getBoundingClientRect();
+    return buttons.map((b) => {
+      const r = b.getBoundingClientRect();
+      const m = getComputedStyle(b, "::after");
+      const top = parseFloat(m.top) || 0;
+      const left = parseFloat(m.left) || 0;
+      const size = parseFloat(m.width) || 32;
+      return { x: r.left - f.left + left + size / 2, y: r.top - f.top + top + size / 2, size };
+    });
+  }
+
+  function layout() {
+    const pts = markerCenters();
+    if (!pts.length) return;
+
+    // a dashed S-line, from number 1 down through each number in turn
+    const p0 = pts[0];
+    let d = `M${p0.x.toFixed(1)} ${p0.y.toFixed(1)}`;
+    const prefixes = [d];        // the line up to number 1, 2, 3...
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const dy = b.y - a.y;
+      const sway = a.size * 0.9 * (i % 2 ? 1 : -1);
+      d += ` C${(a.x - sway).toFixed(1)} ${(a.y + dy * 0.4).toFixed(1)},` +
+           ` ${(b.x + sway).toFixed(1)} ${(b.y - dy * 0.4).toFixed(1)},` +
+           ` ${b.x.toFixed(1)} ${b.y.toFixed(1)}`;
+      prefixes.push(d);
+    }
+    pathParts = { d, prefixes };
+    if (path) path.setAttribute("d", d);
+    if (revealPath) revealPath.setAttribute("d", d);
+
+    // where each number sits along the line (for the bear to swim to)
+    const measure = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const lengths = prefixes.map((pd) => { measure.setAttribute("d", pd); return measure.getTotalLength(); });
+    geo = { pts, lengths, L: lengths[lengths.length - 1] };
+    wake();
+  }
+
+  // ----- The bear swims along the line -----
+  // Its lantern is at 82.3% / 16.7% of the (mirrored) art; it sits just left
+  // of the point on the line it's heading for. Eased toward that point every
+  // frame (a slower, gentler follow for the mouse; tight while it leads the
+  // line down), tilting a little as it moves up or down. The number it's next
+  // to lights up. Sleeps when it has arrived.
+  const pointAt = (len) => path.getPointAtLength(Math.max(0, Math.min(len, path.getTotalLength())));
+  function pointAtY(y) {                      // the point on the line at height y
+    const { pts, lengths, L } = geo;
+    y = Math.max(pts[0].y, Math.min(pts[pts.length - 1].y, y));
+    let lo = lengths[0], hi = L;              // the line only goes down after number 1
+    for (let k = 0; k < 18; k++) {
+      const mid = (lo + hi) / 2;
+      if (pointAt(mid).y < y) lo = mid; else hi = mid;
+    }
+    return pointAt((lo + hi) / 2);
+  }
+  function targetPoint() {
+    const { pts, lengths } = geo;
+    if (followTip) return pointAt(geo.L - (parseFloat(getComputedStyle(revealPath).strokeDashoffset) || 0));
+    if (bear.classList.contains("is-away") || faq.classList.contains("is-hidden")) return pts[0];
+    if (pointerY !== null) return pointAtY(pointerY);
+    const i = focusIdx >= 0 ? focusIdx : openIdx >= 0 ? openIdx : 0;
+    return pts[i];
+  }
+  let bx = null, by = 0, tilt = 0, lastT = 0, running = false;
+  function tick(now) {
+    running = false;
+    if (!geo || !bear || !bearImg) return;
+    const dt = Math.min(0.05, (now - (lastT || now)) / 1000);
+    lastT = now;
+    const P = targetPoint();
+    const W = bearImg.offsetWidth, H = bearImg.offsetHeight, size = geo.pts[0].size;
+    // lantern at rest (no transform) vs. where it should be
+    const tx = P.x - size / 2 - 4 - (bear.offsetLeft + W * 0.823);
+    const ty = P.y - H * 0.167;
+    const snap = calm || bx === null || bear.classList.contains("is-away");
+    const k = snap ? 1 : 1 - Math.exp(-dt * (followTip ? 16 : 5));
+    const vy = bx === null ? 0 : ty - by;
+    if (bx === null) { bx = tx; by = ty; }
+    const ox = bx, oy = by;
+    bx += (tx - bx) * k;
+    by += (ty - by) * k;
+    // bubbles trail off it as it swims, more the faster it goes
+    const moved = Math.hypot(bx - ox, by - oy);
+    if (moved > 0.4) lastMoveT = now;
+    if (moved > 1.5 && curious) fishLeave();       // the fish darts off when the bear moves
+    if (!calm && !snap && moved > 0.8) {
+      trailAcc += moved * 0.1;
+      while (trailAcc >= 1) {
+        trailAcc -= 1;
+        puff(trail, bear.offsetLeft + bx + W * 0.5, bear.offsetTop + by + H * (by > oy ? 0.3 : 0.6), 1 + (Math.random() < 0.4 ? 1 : 0), W * 0.35);
+      }
+    }
+    tilt += ((calm ? 0 : Math.max(-14, Math.min(14, vy * 0.6))) - tilt) * Math.min(1, k * 1.5);
+    bear.style.transform = `translate(${bx.toFixed(1)}px, ${by.toFixed(1)}px) rotate(${tilt.toFixed(2)}deg)`;
+    // light the number the lantern is next to
+    const ly = by + H * 0.167;
+    let lit = -1;
+    geo.pts.forEach((p, j) => { if (Math.abs(p.y - ly) < p.size * 0.75) lit = j; });
+    items.forEach((li, j) => li.classList.toggle("is-lit", j === lit));
+    const moving = Math.abs(tx - bx) > 0.3 || Math.abs(ty - by) > 0.3 || Math.abs(tilt) > 0.2 || followTip;
+    if (moving) wake();
+  }
+  function wake() {
+    if (!running) { running = true; requestAnimationFrame(tick); }
+  }
+
+  // ----- A little fish drawn to the lantern -----
+  // When the bear has stayed still for a few seconds, a small fish swims over
+  // to look at its light, nibbling at it, and darts off (with a few bubbles)
+  // as soon as the bear moves, or after a while. Not with reduced motion.
+  let lastMoveT = performance.now(), curious = null, fishCooldown = 0;
+  const lantern = () => {
+    const W = bearImg.offsetWidth, H = bearImg.offsetHeight;
+    return { x: bear.offsetLeft + bx + W * 0.823, y: bear.offsetTop + by + H * 0.167, W };
+  };
+  function fishLeave() {
+    if (!curious || curious.leaving) return;
+    curious.leaving = true;
+    const f = curious, L = lantern();
+    clearTimeout(f.timer);
+    f.go && f.go.cancel();
+    const from = getComputedStyle(f.el).transform;
+    f.el.classList.remove("is-nibbling");
+    f.el.animate([{ transform: from, opacity: 1 },
+      { transform: `translate(${(L.x - L.W * 1.9).toFixed(0)}px, ${(L.y - L.W * 1.3).toFixed(0)}px) scaleX(-1)`, opacity: 0 }],
+      { duration: 650, easing: "cubic-bezier(.3,.6,.4,1)", fill: "forwards" }).onfinish = () => { f.el.remove(); };
+    puff(trail, L.x - L.W * 0.12, L.y - L.W * 0.2, 3, 12, 0.6);
+    curious = null;
+    fishCooldown = performance.now() + 7000;
+  }
+  function fishVisit() {
+    const L = lantern(), size = L.W * 0.33;
+    const el = document.createElement("span");
+    el.className = "lure-fish";
+    el.style.width = `${size.toFixed(0)}px`;
+    el.innerHTML = '<img src="assets/fish-2.png" alt="" />';
+    faq.appendChild(el);                         // in front of the bear (z 3)
+    const hx = L.x - size * 0.95, hy = L.y - size * 1.05;   // just above-left of the light, looking at it
+    const go = el.animate([
+      { transform: `translate(${(hx - L.W * 1.6).toFixed(0)}px, ${(hy - L.W * 1.1).toFixed(0)}px)`, opacity: 0 },
+      { transform: `translate(${hx.toFixed(0)}px, ${hy.toFixed(0)}px)`, opacity: 1 }
+    ], { duration: 1700, easing: "cubic-bezier(.2,.7,.3,1)", fill: "forwards" });
+    curious = { el, go, leaving: false, timer: 0 };
+    go.onfinish = () => {
+      if (!curious || curious.el !== el) return;
+      el.classList.add("is-nibbling");
+      curious.timer = setTimeout(fishLeave, 5500);
+    };
+  }
+  if (!calm) {
+    let faqOnScreen = false;
+    new IntersectionObserver((e) => { faqOnScreen = e[0].isIntersecting; }, { threshold: 0.2 }).observe(faq);
+    setInterval(() => {
+      const now = performance.now();
+      if (curious || !geo || !faqOnScreen || document.hidden || now < fishCooldown) return;
+      if (faq.classList.contains("is-hidden") || bear.classList.contains("is-away")) return;
+      if (now - lastMoveT > 2800) fishVisit();
+    }, 700);
+  }
+
+  // the mouse anywhere over the FAQ steers the bear (touch doesn't: there it
+  // swims to the question you tap)
+  const reefEl = document.querySelector(".reef") || faq;
+  reefEl.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    pointerY = e.clientY - faq.getBoundingClientRect().top;
+    wake();
+  });
+  reefEl.addEventListener("pointerleave", () => { pointerY = null; wake(); });
+
+  buttons.forEach((b, i) => {
+    b.addEventListener("click", () => setOpen(openIdx === i ? -1 : i));
+    // keyboard focus only (a mouse click focuses the button too)
+    b.addEventListener("focus", () => { if (b.matches(":focus-visible")) { focusIdx = i; pointerY = null; wake(); } });
+    b.addEventListener("blur", () => { focusIdx = -1; wake(); });
+  });
+
+  // ----- The bear's trip: floats in a bubble through the Sponsors sea, the
+  // bubble pops, and it dives down to its spot by the questions -----
+  // A stand-in bear rides in a page-level layer (.bear-trip) over the sea and
+  // the reef while the real .faq__bear is hidden. Scrolling down from the
+  // Sponsors moves the bubble from off the left edge toward the middle, just
+  // above the FAQ (p goes 0 -> 1 as the FAQ's top edge climbs from the bottom
+  // of the window to 40% down it). At p = 1 it pops and dives (once per
+  // visit), then the real bear takes over. Skipped with reduced motion, or if
+  // the page opens already past that point.
+  const sea = document.querySelector(".sea");
+  const reef = document.querySelector(".reef");
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const seamProgress = () => {
+    const vh = window.innerHeight;
+    return Math.min(1, Math.max(0, (vh - reef.getBoundingClientRect().top) / (vh * 0.6)));
+  };
+  // Decided once the page has loaded (and jumped to a #link or restored its
+  // scroll position), so a link straight to the FAQ never hides the questions.
+  // A link to the FAQ (or anything after it) skips it too: the page is still
+  // smooth-scrolling there when it loads.
+  function linkedPastSea() {
+    const id = decodeURIComponent(location.hash.slice(1));
+    const el = id && document.getElementById(id);
+    return !!el && (el === reef || reef.contains(el) ||
+      !!(reef.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING));
+  }
+  function setupTrip() {
+  if (bear && bearImg && sea && reef && !reduce && !linkedPastSea() && seamProgress() < 1 && "animate" in Element.prototype) {
+    bear.classList.add("is-away");
+    faq.classList.add("is-hidden");          // the questions wait for the bear
+    items.forEach((li, i) => li.style.setProperty("--i", i));
+    let revealed = false;
+    // Draw the line along its length (a mask path's dash offset), stopping at
+    // each number: the number pops in, then its question fades in, then the
+    // line goes on to the next one. Slow and calm: about 1s per stretch.
+    path.setAttribute("mask", "url(#faq-path-mask)");
+    let L = 0;
+    const hideLine = () => {
+      L = path.getTotalLength();
+      revealPath.style.strokeDasharray = `${L} 100000`;   // one dash, then nothing
+      revealPath.style.strokeDashoffset = `${L}`;
+    };
+    hideLine();
+    function finishReveal() {
+      followTip = false;
+      path.removeAttribute("mask");
+      revealPath.style.strokeDasharray = revealPath.style.strokeDashoffset = "";
+      faq.classList.remove("is-hidden");
+      items.forEach((li) => li.classList.remove("is-dot", "is-in"));
+      layout();
+    }
+    async function reveal(instant) {
+      if (revealed) return;
+      revealed = true;
+      if (instant) { finishReveal(); return; }
+      layout();
+      hideLine();
+      const measure = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      const lengths = pathParts.prefixes.map((pd) => { measure.setAttribute("d", pd); return measure.getTotalLength(); });
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      let at = 0;                            // how much of the line is drawn
+      for (let i = 0; i < items.length; i++) {
+        const to = lengths[i];
+        // number 1 appears where the bear lands; from there the bear swims
+        // the line down, drawing it as it goes
+        followTip = i > 0;
+        wake();
+        if (to > at) {
+          await revealPath.animate(
+            [{ strokeDashoffset: `${L - at}px` }, { strokeDashoffset: `${L - to}px` }],
+            { duration: 1300, easing: "cubic-bezier(.45,0,.4,1)", fill: "forwards" }).finished;
+        } else {
+          await wait(350);                   // a short beat after landing
+        }
+        revealPath.style.strokeDashoffset = `${L - to}px`;
+        at = to;
+        items[i].classList.add("is-dot");    // the number pops in...
+        await wait(280);
+        items[i].classList.add("is-in");     // ...then its question fades in
+        await wait(i < items.length - 1 ? 520 : 1100);
+      }
+      finishReveal();
+    }
+    // keyboard users never wait: tabbing into the questions shows them now
+    faq.addEventListener("focusin", () => reveal(true), { once: true });
+    const trip = document.createElement("div");
+    trip.className = "bear-trip";
+    trip.setAttribute("aria-hidden", "true");
+    trip.innerHTML = '<div class="bear-trip__rider"><div class="bear-trip__bob">' +
+      '<img class="bear-trip__bear" src="assets/faq-bear.webp" alt="" />' +
+      '<div class="bear-trip__bubble"></div></div></div>';
+    document.body.appendChild(trip);
+    const rider = trip.querySelector(".bear-trip__rider");
+    const bob = trip.querySelector(".bear-trip__bob");
+    const bubble = trip.querySelector(".bear-trip__bubble");
+    let D = 0, W = 0, layerTop = 0, seamY = 0, done = false, ticking = false;
+    const ease = (t) => 1 - Math.pow(1 - t, 3);
+
+    function place() {                       // layer over the sea + reef, sizes from the real bear
+      const seaTop = sea.getBoundingClientRect().top + window.scrollY;
+      layerTop = seaTop;
+      seamY = reef.getBoundingClientRect().top + window.scrollY - seaTop;   // the edge, in layer px
+      trip.style.top = `${seaTop.toFixed(0)}px`;
+      trip.style.height = `${(sea.offsetHeight + reef.offsetHeight).toFixed(0)}px`;
+      W = bearImg.offsetWidth || 150;
+      D = W * 1.5;                           // the bubble is a bit bigger than the bear
+      rider.style.width = rider.style.height = `${D.toFixed(0)}px`;
+      rider.style.setProperty("--bw", `${W.toFixed(0)}px`);
+    }
+    function floatPos(p) {                   // where the bubble is at progress p (layer px)
+      const vw = document.documentElement.clientWidth;
+      const e = ease(p);
+      const x = -D + e * (vw * 0.46 - D / 2 + D);
+      // swims across, nearly level, low enough to stay clear of the sponsor
+      // logos (it can dip over the edge into the FAQ: the layer spans both)
+      // (on phones the logos come closer to the edge, so it rides lower, across it)
+      const lift = vw < 760 ? 0.3 : 0.62;
+      const y = seamY - D * lift + Math.sin(p * Math.PI * 3) * D * 0.03;
+      return { x, y };
+    }
+    function update() {
+      ticking = false;
+      if (done) return;
+      const p = seamProgress();
+      const { x, y } = floatPos(p);
+      rider.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+      if (p >= 1) popAndDive(x, y);
+    }
+    function popAndDive(x, y) {
+      done = true;
+      window.removeEventListener("scroll", onScroll);
+      // pop: the bubble wobbles (squash and stretch), then bursts: it
+      // flashes and vanishes, a ring rushes out, short chalky "pop" strokes
+      // shoot out around it and little droplets scatter
+      const POP = 170;                       // ms of wobble before the burst
+      bubble.animate([
+        { transform: "scale(1)", opacity: .9 },
+        { transform: "scale(1.08, .92)", opacity: .9, offset: 0.4 },
+        { transform: "scale(.95, 1.06)", opacity: .95, offset: 0.75 },
+        { transform: "scale(1.04)", opacity: 1 }
+      ], { duration: POP, easing: "ease-in-out", fill: "forwards" }).onfinish = () => {
+        bubble.animate([{ transform: "scale(1.04)", opacity: 1, filter: "brightness(1.6)" },
+                        { transform: "scale(1.3)", opacity: 0, filter: "brightness(1)" }],
+          { duration: 180, easing: "ease-out", fill: "forwards" });
+        const ring = document.createElement("div");
+        ring.className = "bear-trip__ring";
+        bob.appendChild(ring);
+        ring.animate([{ transform: "scale(1)", opacity: .9 }, { transform: "scale(1.65)", opacity: 0 }],
+          { duration: 420, easing: "cubic-bezier(.2,.7,.3,1)", fill: "forwards" }).onfinish = () => ring.remove();
+        for (let i = 0; i < 10; i++) {       // pop strokes
+          const a = (i / 10) * 360 + (i % 2) * 12;
+          const len = D * (i % 2 ? 0.09 : 0.14);
+          const line = document.createElement("div");
+          line.className = "bear-trip__spark";
+          line.style.height = `${len.toFixed(0)}px`;
+          line.style.left = `${(D / 2 - 1.5).toFixed(0)}px`;
+          line.style.top = `${(D / 2 - len / 2).toFixed(0)}px`;
+          bob.appendChild(line);
+          line.animate([
+            { transform: `rotate(${a}deg) translateY(${(-D * 0.5).toFixed(0)}px) scaleY(1)`, opacity: 1 },
+            { transform: `rotate(${a}deg) translateY(${(-D * 0.8).toFixed(0)}px) scaleY(.3)`, opacity: 0 }
+          ], { duration: 360, easing: "cubic-bezier(.2,.7,.3,1)", fill: "forwards" }).onfinish = () => line.remove();
+        }
+        for (let i = 0; i < 9; i++) {        // droplets
+          const a = (i / 9) * Math.PI * 2 + 0.3;
+          const s = D * (0.06 + (i % 3) * 0.035);
+          const drop = document.createElement("div");
+          drop.className = "bear-trip__drop";
+          drop.style.width = `${s.toFixed(0)}px`;
+          drop.style.left = `${(D / 2 - s / 2).toFixed(0)}px`;
+          drop.style.top = `${(D / 2 - s / 2).toFixed(0)}px`;
+          bob.appendChild(drop);
+          const dx = Math.cos(a) * D * 0.8, dy = Math.sin(a) * D * 0.8 - D * 0.25;
+          drop.animate([{ transform: "translate(0,0) scale(.6)", opacity: .9 },
+                        { transform: `translate(${dx.toFixed(0)}px, ${dy.toFixed(0)}px) scale(1)`, opacity: 0 }],
+            { duration: 700, easing: "cubic-bezier(.2,.7,.3,1)", fill: "forwards" }).onfinish = () => drop.remove();
+        }
+      };
+      // dive: turn to face straight down (the art faces right, so +80deg
+      // points its nose down), swim down to question 1, then level out
+      bob.style.animation = "none";
+      const r = bearImg.getBoundingClientRect();
+      const tx = r.left + r.width / 2 - D / 2;
+      const ty = r.top + window.scrollY - layerTop + r.height / 2 - D / 2;
+      const T = (px, py, deg) => `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) rotate(${deg}deg)`;
+      const dive = rider.animate([
+        { transform: T(x, y, 0), easing: "ease-out" },
+        { transform: T(x, y - D * 0.1, 80), offset: 0.22, easing: "cubic-bezier(.5,0,.3,1)" },   // turn nose-down
+        { transform: T(x + (tx - x) * 0.85, y + (ty - y) * 0.9, 80), offset: 0.78, easing: "ease-out" }, // swim down
+        { transform: T(tx, ty, 0) }                                                                  // level out by question 1
+      ], { duration: 2000, delay: POP + 120, fill: "forwards" });
+      // bubbles stream up off the bear as it dives, more the faster it goes
+      let lastX = null, lastY = 0, acc = 0;
+      (function stream() {
+        if (dive.playState === "finished") return;
+        const lr = trip.getBoundingClientRect(), rr = rider.getBoundingClientRect();
+        const cx = rr.left - lr.left + rr.width / 2, cy = rr.top - lr.top + rr.height / 2;
+        if (lastX !== null) {
+          acc += Math.hypot(cx - lastX, cy - lastY) * 0.12;
+          while (acc >= 1) { acc -= 1; puff(trip, cx, cy - D * 0.15, 3, W * 0.55); }
+        }
+        lastX = cx; lastY = cy;
+        requestAnimationFrame(stream);
+      })();
+      dive.onfinish = () => {                // hand over to the real bear, then grow the questions
+        bear.classList.remove("is-away");
+        rider.style.visibility = "hidden";
+        setTimeout(() => trip.remove(), 1800);   // let the last trail bubbles float away
+        layout();
+        reveal(false);
+      };
+    }
+    function onScroll() {
+      if (!ticking) { ticking = true; requestAnimationFrame(update); }
+    }
+    place();
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", () => { if (!done) { place(); update(); } });
+    if (!bearImg.complete) bearImg.addEventListener("load", () => { if (!done) { place(); update(); } });
+  }
+  }
+  const afterLoad = () => requestAnimationFrame(() => requestAnimationFrame(setupTrip));
+  if (document.readyState === "complete") afterLoad();
+  else window.addEventListener("load", afterLoad, { once: true });
+
+  // Small bubbles rising from the reef up into the sea: drawn twice,
+  // identically, in .reef-rise--reef and .reef-rise--sea (see styles.css).
+  const reefRise = document.querySelectorAll(".reef-rise");
+  if (reefRise.length) {
+    const R = (i, n) => ((Math.sin(i * 33.71 + n * 12.17) * 43758.5453) % 1 + 1) % 1;
+    for (let i = 0; i < 6; i++) {
+      const t = 14 + R(i, 1) * 9;                 // 14-23 s for the whole rise
+      const style = `--x:${(6 + i * 15.5 + R(i, 2) * 7).toFixed(1)};--s:${(3.5 + R(i, 3) * 4).toFixed(1)};` +
+        `--t:${t.toFixed(1)}s;--d:-${(R(i, 4) * t).toFixed(1)}s;--w:${(2.6 + R(i, 5) * 2).toFixed(1)}s`;
+      reefRise.forEach((layer) => {
+        const b = document.createElement("div");
+        b.className = "rise-bubble";
+        b.style.cssText = style;
+        layer.appendChild(b);
+      });
+    }
+  }
+
+  if ("ResizeObserver" in window) new ResizeObserver(layout).observe(list);
+  window.addEventListener("resize", layout);
+  if (bearImg && !bearImg.complete) bearImg.addEventListener("load", layout);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+  layout();
 })();

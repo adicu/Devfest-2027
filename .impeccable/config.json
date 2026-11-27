@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "radial-halo",
+        "value": "*",
+        "files": [
+          "index.html"
+        ],
+        "createdAt": "2026-11-27T01:21:31.779Z",
+        "reason": "User requested literal light sources in chat (pearls lighting up, the bear's lantern light, gloaming glow); the radial gradients are those lights, not decorative halos"
+      }
+    ]
+  }
+}

@@ -336,9 +336,7 @@ body {
 @keyframes nudge { 50% { translate: 0 6px; } }
 
 /* ===================== CONTENT ===================== */
-/* Split in two:
-   top:    sunset water -> deep (meets the subway's top fade)
-   bottom: the FAQ under the Sponsors: sea -> deep */
+/* About, Tracks, Schedule: sunset water -> deep (meets the subway's top fade) */
 .content {
   position: relative;
   padding: 4rem 1.25rem 10rem;
@@ -346,10 +344,6 @@ body {
 .content--top {
   background: linear-gradient(var(--water-sunset), var(--water-deep) 45%);
   padding-bottom: 4rem;
-}
-.content--bottom {
-  background: linear-gradient(#4ca8b3, var(--water-deep) 14rem);
-  padding-bottom: 6rem;
 }
 .section {
   max-width: 960px;
@@ -409,12 +403,6 @@ body {
 }
 .time { font: 700 1.4rem var(--font-hand); color: var(--glow); margin-right: .5rem; }
 
-details {
-  border-bottom: 2px solid rgba(246, 231, 200, .25);
-  padding: 1rem 0;
-}
-summary { cursor: pointer; font: 700 1.5rem var(--font-hand); }
-details p { margin: .6rem 0 0; }
 
 
 /* ===================== SPEAKERS & JUDGES (subway) ===================== */
@@ -766,6 +754,16 @@ details p { margin: .6rem 0 0; }
   background: var(--sea-top) url("assets/sea.jpg") top center / 100% auto repeat-y;
 }
 
+/* the sea's bottom edge fades to one flat color, which the FAQ below starts from */
+.sea::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 6vw;
+  background: linear-gradient(rgba(86, 173, 184, 0), #56adb8);
+  pointer-events: none;
+}
+
 /* ---------- Fish: swim smoothly across, above the heading ---------- */
 /* .fish (wrapper) does the crossing: linear, steady, --t per crossing.
    The img inside does the rest, so nothing rotates around a far-away point:
@@ -985,10 +983,611 @@ a.sponsor:hover, a.sponsor:focus-visible { transform: scale(1.06); }
 .tier--silver .sponsor { width: clamp(75px, 8vw, 145px); }
 .tier--bronze .sponsor { width: clamp(55px, 5.5vw, 100px); }
 
+/* ===================== FAQ (the reef) ===================== */
+/* faq-reef.webp (2522 x 1359: the painting with its open water widened in
+   the middle and a soft vignette) sits at the bottom, full width; the open
+   water above it deepens from the Sponsors teal to the painting's top color. The questions float in the open water between the ruins and the
+   rocks. Art scale: the bars are drawn at 830 x 166 (blank bars) and
+   836 x 302 (answer panel); --k shrinks them to on-screen size. */
+.reef {
+  --reef-top: #3a80a4;          /* top edge of faq-reef.webp */
+  --sea-join: #56adb8;          /* where the Sponsors sea fades to (.sea::after) */
+  --art-h: 53.89vw;             /* the painting's height: aspect 1359 / 2522 */
+  position: relative;
+  /* at least a full screen, and always a band of open water above the painting */
+  min-height: max(100vh, calc(var(--art-h) + clamp(160px, 18vw, 340px)));
+  min-height: max(100svh, calc(var(--art-h) + clamp(160px, 18vw, 340px)));
+  /* a fixed top (not centered), so opening an answer only pushes the
+     questions below it down and the one you clicked stays put */
+  padding: 21vw 4vw 15vw;       /* sign + water above, the reef below */
+  overflow: hidden;
+  /* the painting at the bottom; above it the water deepens from the Sponsors
+     teal to the painting's own top color, ending right where the art starts */
+  background:
+    url("assets/faq-reef.webp") center bottom / 100% auto no-repeat,
+    linear-gradient(var(--sea-join),
+      color-mix(in srgb, var(--sea-join) 40%, var(--reef-top)) calc((100% - var(--art-h)) * .45),
+      color-mix(in srgb, var(--sea-join) 10%, var(--reef-top)) calc((100% - var(--art-h)) * .8),
+      var(--reef-top) calc(100% - var(--art-h)));   /* eased, so the join with the art doesn't show */
+}
+
+/* ---------- Twilight: light shafts + drifting specks ---------- */
+/* Warm dusk light slanting down from the surface (the hero's sunset), on top
+   of the painting with "screen" so it only brightens. Each shaft breathes
+   slowly. Behind the sign and the questions. */
+.reef__light {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  /* fade in below the top edge, so there's no bright line where the sea meets the reef */
+  -webkit-mask-image: linear-gradient(transparent, #000 14vw);
+  mask-image: linear-gradient(transparent, #000 14vw);
+}
+.reef__light span {
+  position: absolute;
+  top: -10%;
+  width: var(--w, 12vw);
+  height: 95%;
+  left: var(--x, 30%);
+  background: linear-gradient(rgba(255, 228, 178, .30), rgba(255, 228, 178, .10) 45%, rgba(255, 228, 178, 0));
+  filter: blur(18px);
+  transform-origin: 50% 0;
+  rotate: 16deg;
+  animation: shaft 9s ease-in-out var(--d, 0s) infinite alternate;
+}
+.reef__light span:nth-child(1) { --x: 24%; --w: 9vw;  --d: 0s; }
+.reef__light span:nth-child(2) { --x: 42%; --w: 15vw; --d: -3s; }
+.reef__light span:nth-child(3) { --x: 63%; --w: 7vw;  --d: -6s; }
+.reef__light span:nth-child(4) { --x: 78%; --w: 11vw; --d: -1.5s; }
+@keyframes shaft {
+  from { opacity: .45; rotate: 14deg; }
+  to   { opacity: 1;   rotate: 18deg; }
+}
+
+.reef__motes {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.mote {
+  position: absolute;
+  left: calc(var(--x) * 1%);
+  bottom: -10px;
+  width: var(--s);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(255, 240, 205, .9);
+  box-shadow: 0 0 6px rgba(255, 236, 190, .8);
+  opacity: 0;
+  animation: mote-rise var(--t) linear var(--d) infinite, mote-sway calc(var(--t) / 4) ease-in-out var(--d) infinite alternate;
+}
+@keyframes mote-rise {
+  0%   { transform: translateY(0); opacity: 0; }
+  12%  { opacity: var(--o); }
+  85%  { opacity: var(--o); }
+  100% { transform: translateY(-75vw); opacity: 0; }
+}
+@keyframes mote-sway { from { translate: -1.2vw 0; } to { translate: 1.2vw 0; } }
+
+/* ---------- Bubbles rising from the reef into the sea above ---------- */
+/* The same trick as the big bubbles between the sea and the subway: each
+   bubble is drawn twice, with identical position, size and timing, once in
+   .reef-rise--reef (clipped at the reef's top edge) and once in
+   .reef-rise--sea (clipped at the sea's bottom edge). Both strips cover the
+   same stretch of page: --rr-in of reef plus --rr-up of sea, so together they
+   read as one bubble crossing over. They fade out as they rise into the sea.
+   Smaller than the sea's big bubbles, and behind the questions. script.js
+   adds them. */
+.reef-rise {
+  --rr-in: 34vw;                         /* starts this far down in the reef */
+  --rr-up: 38vw;                         /* fades out this far up in the sea */
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: calc(var(--rr-in) + var(--rr-up));
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(transparent, #000 45%);
+  mask-image: linear-gradient(transparent, #000 45%);
+}
+.reef-rise--reef { top: calc(-1 * var(--rr-up)); }
+.reef-rise--sea  { top: calc(100% - var(--rr-up)); z-index: 1; }   /* over the sea's bottom fade, under the sponsors (z 2) */
+.reef-rise .rise-bubble {
+  animation-name: reef-rise, rise-sway;
+}
+@keyframes reef-rise {
+  0%   { translate: 0 0;                                                   opacity: 0; }
+  10%  { opacity: .7; }
+  100% { translate: 0 calc(-1 * (var(--rr-in) + var(--rr-up)) - 100%);     opacity: .7; }
+}
+
+/* ---------- Far-off fish ---------- */
+/* Two small schools drift across slowly (52s / 64s a crossing), dim, soft
+   and see-through so they sit far back, in the open water above the
+   questions (never behind their text). Each fish in a
+   school is offset (--fx/--fy, vw) and has its own little wave. */
+.reef__fish {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.school {
+  position: absolute;
+  left: 0;
+  top: calc(var(--y) * 1%);
+  animation: var(--swim) var(--t) linear var(--d) infinite;
+  will-change: transform;
+}
+.school--ltr { --swim: school-ltr; }
+.school--rtl { --swim: school-rtl; }
+.school img {
+  position: absolute;
+  left: calc(var(--fx) * 1vw);
+  top: calc(var(--fy) * 1vw);
+  width: clamp(34px, 4.2vw, 70px);
+  opacity: .38;
+  filter: brightness(.55) saturate(.45) blur(.7px);
+  animation: school-wave 3.2s ease-in-out infinite alternate;
+  animation-delay: calc(var(--fx) * -.31s);
+}
+@keyframes school-ltr { from { transform: translateX(-20vw); } to { transform: translateX(118vw); } }
+@keyframes school-rtl { from { transform: translateX(118vw); } to { transform: translateX(-20vw); } }
+@keyframes school-wave { from { translate: 0 -.4vw; } to { translate: 0 .4vw; } }
+
+/* ---------- Glowing pearls ---------- */
+/* .reef__art is exactly where the painting is drawn (full width, --art-h tall,
+   at the bottom), so the pearls sit on the painted pearls (% of the art). */
+.reef__art {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--art-h);
+  z-index: 1;
+  pointer-events: none;
+}
+/* Swaying seaweed: each piece comes from the Procreate file's seaweed layers
+   (assets/weed/, positions in % of the art) and leans side to side from where
+   it grows (skewX around --oy, so the base stays put and the tips move most;
+   the hanging vines swing from the top). */
+.weed {
+  position: absolute;
+  left: calc(var(--l) * 1%);
+  top: calc(var(--t) * 1%);
+  width: calc(var(--w) * 1%);
+  height: auto;
+  transform-origin: 50% calc(var(--oy) * 1%);
+  animation: weed-sway var(--sw) ease-in-out var(--sd) infinite alternate;
+  will-change: transform;
+}
+.weed-front {                   /* what's in front of the seaweed in the drawing: stays still */
+  position: absolute;
+  left: calc(var(--l) * 1%);
+  top: calc(var(--t) * 1%);
+  width: calc(var(--w) * 1%);
+  height: auto;
+}
+@keyframes weed-sway {
+  from { transform: skewX(calc(-1 * var(--amp))); }
+  to   { transform: skewX(var(--amp)); }
+}
+.pearl {
+  position: absolute;
+  left: calc(var(--x) * 1%);
+  top: calc(var(--y) * 1%);
+  width: clamp(26px, 2.6vw, 48px);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: auto;                 /* point at it / tap it (script.js) */
+}
+.pearl::before {                        /* the glow */
+  content: "";
+  position: absolute;
+  inset: -60%;
+  border-radius: 50%;
+  background: radial-gradient(rgba(255, 246, 200, .95), rgba(255, 232, 150, .45) 22%, rgba(255, 225, 140, 0) 62%);
+  animation: pearl-glow var(--pt) ease-in-out var(--pd) infinite alternate;
+}
+@keyframes pearl-glow {
+  from { opacity: .35; transform: scale(.8); }
+  to   { opacity: 1;   transform: scale(1.15); }
+}
+
+/* ---------- Hanging sign (top left, over the ruins) ---------- */
+.reef__sign-bubbles {           /* bubbles rising from the sign (script.js), behind it */
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+/* sign-faq.png: its ropes run up off the top edge of the section */
+.reef__sign {
+  position: absolute;
+  top: 0;
+  left: 8vw;
+  z-index: 1;
+  margin: 0;
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .3));
+  transform-origin: 50% 0;
+  animation: sign-float 7s ease-in-out infinite;   /* hanging in a gentle current */
+  cursor: default;
+}
+@keyframes sign-float {
+  0%, 100% { rotate: -1.6deg; translate: 0 0; }
+  50%      { rotate: 1.4deg;  translate: 0 5px; }
+}
+.reef__sign img {
+  display: block;
+  transform-origin: 50% 0;              /* swings from its ropes (script.js) */
+  width: clamp(220px, 25vw, 440px);
+  height: auto;
+  /* the ropes fade up into the water, as if they hang from far above
+     (the shadow is on .reef__sign, so the mask doesn't clip it) */
+  -webkit-mask-image: linear-gradient(transparent, #000 22%);
+  mask-image: linear-gradient(transparent, #000 22%);
+}
+
+/* ---------- Questions ---------- */
+/* Layout, left to right: the bear (in .faq's left padding), the numbers
+   (in .faq__list's left padding), the bars. */
+.faq {
+  --bear: clamp(130px, 13vw, 230px);    /* bear width */
+  --dot: clamp(36px, 3vw, 48px);        /* number circle */
+  --gap: clamp(12px, 1.1vw, 18px);      /* number -> bar */
+  --k: .48;                             /* art scale (bar height = 166px x k) */
+  position: relative;
+  z-index: 1;
+  width: calc(var(--bear) + var(--dot) + var(--gap) + min(30vw, 520px));
+  margin: 0 auto;               /* centered in the open water (24-79% of the art)... */
+  left: -4vw;                   /* ...then nudged a little to the left */
+  padding-left: var(--bear);
+}
+.faq__list {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 1.3vw, 20px);
+  margin: 0;
+  padding: 0 0 0 calc(var(--dot) + var(--gap));
+  list-style: none;
+  counter-reset: faq;
+}
+.faq__item {
+  counter-increment: faq;
+  display: grid;
+  grid-template-rows: auto 0fr;         /* answer folded away */
+  transition: grid-template-rows .45s ease;
+}
+.faq__item.is-open { grid-template-rows: auto 1fr; }
+.faq__item h3 { position: relative; z-index: 1; margin: 0; }   /* the bar sits over its answer's top */
+
+.faq__q {
+  position: relative;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  min-height: calc(166px * var(--k) - 8px);
+  padding: 12px calc(165px * var(--k)) 12px calc(85px * var(--k) - 4px);   /* text may run up to the +/- */
+  font: 700 clamp(1.35rem, 1.75vw, 1.75rem)/1.15 var(--font-hand);
+  color: var(--cream);
+  text-align: left;
+  text-shadow: 0 1px 2px rgba(16, 36, 60, .85);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color .8s ease .25s, text-shadow .8s ease .25s;              /* text follows the bar in */
+}
+/* the chalk bar: a 9-slice of the art, so the middle stretches to fit the
+   text and the round ends and the +/- button keep their shape */
+.faq__q::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  z-index: -1;
+  border: solid transparent;
+  border-width: calc(76px * var(--k)) calc(195px * var(--k)) calc(76px * var(--k)) calc(85px * var(--k));
+  border-image: url("assets/faq-pill.webp") 76 195 76 85 fill / calc(76px * var(--k)) calc(195px * var(--k)) calc(76px * var(--k)) calc(85px * var(--k));
+  border-radius: 999px;
+  transition: opacity .9s ease, transform 1s cubic-bezier(.2, .8, .2, 1);   /* fades in when it first appears */
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);           /* the fill is see-through: frosted glass over the water */
+}
+.faq__q:hover::before { border-image-source: url("assets/faq-pill-hover.webp"); }
+.faq__q[aria-expanded="true"]::before { border-image-source: url("assets/faq-pill-open.webp"); }
+.faq__q:focus-visible { outline: 3px solid var(--glow); outline-offset: 5px; }
+
+/* the number circle, on the dashed path */
+.faq__q::after {
+  content: counter(faq);
+  position: absolute;
+  left: calc(-1 * (var(--dot) + var(--gap)));
+  top: calc((166px * var(--k) - 8px - var(--dot)) / 2);
+  display: grid;
+  place-items: center;
+  width: var(--dot);
+  aspect-ratio: 1;
+  font: 800 calc(var(--dot) * .5)/1 var(--font-body);
+  color: #fff6e3;
+  text-shadow: 0 0 6px rgba(170, 215, 255, .7), 0 1px 1px rgba(16, 36, 60, .6);
+  /* the same glowing chalk circle as the bars' +/- button (faq-dot*.webp:
+     the circle fills 86% of the art, the rest is its glow) */
+  background: url("assets/faq-dot.webp") center / 116% no-repeat;
+  border: 0;
+  border-radius: 50%;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  filter: drop-shadow(0 0 7px rgba(150, 205, 255, .35));
+  transition: color .4s ease, filter .5s ease,
+              transform .6s cubic-bezier(.34, 1.56, .64, 1);   /* the pop when it first appears */
+}
+/* the open question's number gets the gold rim, like its bar */
+.faq__q[aria-expanded="true"]::after {
+  background-image: url("assets/faq-dot-open.webp");
+  text-shadow: 0 0 7px rgba(255, 230, 160, .8), 0 1px 1px rgba(16, 36, 60, .6);
+  filter: drop-shadow(0 0 8px rgba(255, 226, 150, .4));
+}
+/* lit by the bear's lantern */
+.faq__item.is-lit .faq__q::after {
+  color: var(--ink);
+  text-shadow: 0 0 4px rgba(255, 250, 230, .8);
+  background-image: url("assets/faq-dot-lit.webp");
+  filter: drop-shadow(0 0 10px rgba(255, 228, 150, .75));
+  animation: dot-glow 2.4s ease-in-out infinite alternate;   /* breathes with the lantern */
+}
+@keyframes dot-glow {
+  from { filter: drop-shadow(0 0 7px rgba(255, 228, 150, .55)); }
+  to   { filter: drop-shadow(0 0 14px rgba(255, 228, 150, .9)); }
+}
+
+/* ---------- Answers ---------- */
+/* The answer is joined to its question: the panel slides out from under the
+   bar (its top half tucked behind the bar, --tuck), and its art has no top
+   edge (faq-panel-joined.webp fades in at the top), so the bar and the panel
+   read as one piece. */
+.faq__item { --tuck: calc((166px * var(--k) - 8px) / 2); }
+.faq__a {
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;                   /* hidden from screen readers too */
+  transition: visibility 0s .45s, margin-top .45s ease;
+}
+.faq__item.is-open .faq__a {
+  margin-top: calc(-1 * var(--tuck));
+  visibility: visible;
+  transition-delay: 0s;
+}
+.faq__panel {
+  margin: 0 calc(14px * var(--k) / .48) 4px;
+  padding: calc(var(--tuck) + 14px) 26px 22px;   /* text starts below the bar; the art fills the whole box */
+  border-image: url("assets/faq-panel-joined.webp") 80 fill / calc(80px * var(--k));
+  border-radius: 0 0 calc(80px * var(--k)) calc(80px * var(--k));
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  color: #fff6e3;
+  text-shadow: 0 1px 2px rgba(16, 36, 60, .85);
+}
+.faq__panel p { margin: 0; font-size: clamp(1.05rem, 1.2vw, 1.2rem); line-height: 1.6; }
+.faq__panel p + p { margin-top: .6em; }
+
+/* ---------- The dashed path between the numbers (script.js) ---------- */
+.faq__path {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.faq__line {
+  fill: none;
+  stroke: var(--cream);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 6 7;
+  opacity: .85;
+}
+.faq__path-reveal {                     /* the mask that draws the line on (script.js) */
+  fill: none;
+  stroke: #fff;
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+
+/* ---------- The anglerfish bear ---------- */
+/* Swims along the dashed line (script.js sets its transform): to the height
+   of your mouse, or the question you tabbed to / opened. The art is mirrored
+   so it faces the questions, lantern first. */
+.faq__bear {
+  position: absolute;
+  top: 0;
+  left: calc(var(--bear) * .177 - 4px);   /* lantern just left of the number */
+  z-index: 2;
+  width: var(--bear);
+  will-change: transform;               /* moved along the line by script.js */
+  pointer-events: none;
+}
+/* hidden while its stand-in (.bear-trip) floats down from the Sponsors sea */
+.faq__bear.is-away { visibility: hidden; }
+
+/* ---------- Questions appear after the bear arrives ---------- */
+/* While the bear is on its trip (.faq.is-hidden), the line, numbers and
+   questions are hidden. When it lands by question 1, script.js draws the
+   dashed line along its length: down into number 1, which pops in (.is-dot),
+   then its question fades in (.is-in); then on down to number 2, and so on.
+   Opacity and transform only. Hidden questions can't be clicked; tabbing into
+   them shows everything at once. */
+.faq.is-hidden .faq__item { pointer-events: none; }
+.faq.is-hidden .faq__item.is-in { pointer-events: auto; }
+.faq.is-hidden .faq__item:not(.is-dot) .faq__q::after { transform: scale(0); }
+.faq.is-hidden .faq__item:not(.is-in) .faq__q::before { opacity: 0; transform: scale(.94) translateY(6px); }
+.faq.is-hidden .faq__item:not(.is-in) .faq__q { color: transparent; text-shadow: none; }
+
+/* ---------- The bear's trip: sea -> bubble pop -> dive into the FAQ ---------- */
+/* A page-level layer over the Sponsors sea and the FAQ (script.js places it),
+   so the bear can cross the edge between them. As you scroll down to the FAQ,
+   the bear floats in a bubble from the left toward the middle of the sea
+   (tied to the scroll, so it drifts back if you scroll up). When the FAQ is
+   well in view, the bubble pops and the bear dives to its spot by the
+   questions, then hands over to the real .faq__bear. Never clickable. */
+.bear-trip {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  overflow: hidden;             /* no sideways scrollbar while it's off to the left */
+  z-index: 59;                  /* just under the sponsors' bubble burst (60) */
+  pointer-events: none;
+}
+.bear-trip__rider {             /* moved by script.js (transform only) */
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+.bear-trip__bob {               /* gentle bobbing while it floats */
+  position: relative;
+  width: 100%;
+  height: 100%;
+  animation: trip-bob 3.4s ease-in-out infinite;
+}
+.bear-trip__bear {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--bw);
+  height: auto;
+  translate: -50% -50%;
+  scale: -1 1;                  /* faces right, like the bear by the questions */
+}
+.bear-trip__bubble {
+  position: absolute;
+  inset: 0;
+  background: url("assets/bubble.png") center / contain no-repeat;
+  opacity: .9;
+}
+.bear-trip__drop {              /* the little bubbles flying off when it pops */
+  position: absolute;
+  aspect-ratio: 1;
+  background: url("assets/bubble.png") center / contain no-repeat;
+}
+.bear-trip__ring {              /* the flash of the bubble's skin as it pops */
+  position: absolute;
+  inset: 4%;
+  border: 2px solid rgba(255, 252, 240, .85);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 255, 255, .45);
+}
+.bear-trip__spark {             /* short chalky "pop" strokes */
+  position: absolute;
+  width: 3px;
+  border-radius: 2px;
+  background: rgba(255, 250, 235, .95);
+  transform-origin: 50% 50%;
+}
+/* small bubbles trailing off the bear as it swims (script.js puff()) */
+.puff {
+  position: absolute;
+  left: 0;
+  top: 0;
+  aspect-ratio: 1;
+  background: url("assets/bubble.png") center / contain no-repeat;
+  pointer-events: none;
+}
+.reef { cursor: default; }
+/* the little fish that comes to look at the bear's lantern (script.js) */
+.lure-fish {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.lure-fish img { display: block; width: 100%; height: auto; transform: rotate(18deg); }
+.lure-fish.is-nibbling img { animation: nibble 1.1s ease-in-out infinite alternate; }
+@keyframes nibble {
+  from { transform: translate(0, 0) rotate(14deg); }
+  to   { transform: translate(4px, 5px) rotate(26deg); }
+}
+.faq__trail {                   /* under the bear (z 2) and the questions (z 1, later in the page) */
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+@keyframes trip-bob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50%      { transform: translateY(-6%) rotate(3deg); }
+}
+.faq__bear img {
+  display: block;
+  width: 100%;
+  height: auto;
+  scale: -1 1;
+  animation: bear-bob 3.2s ease-in-out infinite;
+}
+.faq__pool {                            /* the lantern's warm light on the water around it */
+  position: absolute;
+  left: 82.3%;
+  top: 16%;
+  width: 280%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(rgba(255, 226, 160, .2), rgba(255, 226, 160, .08) 35%, rgba(255, 226, 160, 0) 65%);
+  pointer-events: none;
+  animation: lantern 2.4s ease-in-out infinite alternate;
+}
+.faq__glow {                            /* the lantern's light, at 82.3% / 16.7% */
+  position: absolute;
+  left: 82.3%;
+  top: 16%;
+  width: 70%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(rgba(255, 240, 190, .55), rgba(255, 233, 168, 0) 65%);
+  animation: bear-bob 3.2s ease-in-out infinite, lantern 2.4s ease-in-out infinite alternate;
+}
+@keyframes bear-bob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50%      { transform: translateY(-7%) rotate(2deg); }
+}
+@keyframes lantern { from { opacity: .65; } to { opacity: 1; } }
+
+/* ---------- Phones / narrow windows ---------- */
+/* No room beside the reef: the questions take the width, the sign sits
+   above them and the reef shows below. */
+@media (max-width: 760px) {
+  /* no forced full-screen height: the reef sits right under the questions,
+     its top (open water) a little behind the last one */
+  .reef { min-height: 0; padding: 30vw 3vw calc(var(--art-h) * .72); }
+  .reef__sign { left: 6vw; }
+  .reef__sign img { width: clamp(180px, 52vw, 300px); }
+  .faq {
+    --bear: clamp(60px, 17vw, 96px);
+    --dot: 28px;
+    --gap: 7px;
+    --k: .38;                           /* slimmer bars, so the questions fit on one line */
+    width: auto;
+    margin-left: 0;
+    left: 0;
+  }
+  .faq__q { font-size: clamp(1.05rem, 4.4vw, 1.25rem); }
+  .faq__panel p { font-size: 1rem; }
+  .reef__fish { display: none; }        /* no open water above the questions for them here */
+}
+
 .footer {
   text-align: center;
   padding: 2rem 1rem;
-  background: #3a96a2;
+  background: #2b3a44;          /* the reef floor (bottom of faq-reef.webp) */
   color: var(--cream);
 }
 .footer p {
@@ -1005,7 +1604,11 @@ a.sponsor:hover, a.sponsor:focus-visible { transform: scale(1.06); }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .boat, .boat img, .blimp, .scroll-hint, .fish, .fish img, .bubble,
-  .subway__sign { animation: none; }
+  .subway__sign, .reef__sign, .faq__bear img, .faq__glow, .reef__light span,
+  .faq__item.is-lit .faq__q::after, .pearl::before, .faq__pool, .weed { animation: none; }
+  .reef__fish { display: none; }
+  .reef__motes, .reef-rise, .bear-trip { display: none; }
+  .faq__item, .faq__a, .faq__bear, .faq__q::after { transition: none; }
   .rising { display: none; }
   /* fish rest at their spots from the Figma frame */
   .fish { transform: translateX(calc(var(--x) * 1vw)); }
